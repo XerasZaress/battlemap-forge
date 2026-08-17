@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# editors
+.vscode/
+.idea/
+*.swp
+
+# nothing here is built, but keep these out if they ever appear
+node_modules/
+dist/
+*.log
+
+# exported maps and packs — these are output, not source
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.dd2vtt
+*.scene.json
+*.forge.json
+*.forgeprops.json
+*.forgerooms.json

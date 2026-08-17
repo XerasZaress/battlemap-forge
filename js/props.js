@@ -1,0 +1,709 @@
+/* Battlemap Forge — prop library.
+   Every prop draws into a context already translated to its centre and rotated,
+   with `u` = pixels per grid square. Footprint is roughly `size` grid squares. */
+'use strict';
+
+const PROPS = {};
+const PROP_LIST = [];
+
+function defProp(key, label, cat, opts, draw) {
+  const p = Object.assign({ key, label, cat, size: 1, draw, rand: true }, opts || {});
+  // Built things line up with the architecture; natural things sit at any angle.
+  if (p.snap === undefined) p.snap = cat === 'furniture' || cat === 'structure';
+  PROPS[key] = p; PROP_LIST.push(p);
+  return p;
+}
+
+/** Rotation for a newly placed prop: snapped to quarter turns for built objects. */
+function propRotation(def, rng) {
+  if (def.rand === false) return 0;
+  return def.snap ? rng.int(0, 3) * (Math.PI / 2) : rng.range(0, Math.PI * 2);
+}
+
+/* ---------- drawing helpers ---------- */
+
+function shp(ctx, fill, stroke, lw) {
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw || 1; ctx.stroke(); }
+}
+function rectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  if (r) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
+}
+function circ(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); }
+function grain(ctx, x, y, w, h, n, col, vertical) {
+  ctx.strokeStyle = col; ctx.lineWidth = Math.max(0.6, w * 0.012);
+  ctx.beginPath();
+  for (let i = 1; i < n; i++) {
+    if (vertical) { const px = x + (w * i) / n; ctx.moveTo(px, y); ctx.lineTo(px, y + h); }
+    else { const py = y + (h * i) / n; ctx.moveTo(x, py); ctx.lineTo(x + w, py); }
+  }
+  ctx.stroke();
+}
+function blob(ctx, r, points, jitter, rnd) {
+  ctx.beginPath();
+  for (let i = 0; i <= points; i++) {
+    const a = (i / points) * Math.PI * 2;
+    const rr = r * (1 - jitter / 2 + rnd(i) * jitter);
+    const px = Math.cos(a) * rr, py = Math.sin(a) * rr;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+function seededFn(seed) { let s = seed; return (i) => hash2(i, s, 7331); }
+
+const WOOD_D = '#4a3117', WOOD_M = '#6b4a2b', WOOD_L = '#8a6238';
+const METAL_D = '#3c4048', METAL_M = '#6b7280', METAL_L = '#9aa3ad';
+const OUTLINE = 'rgba(0,0,0,0.55)';
+
+/* ================= Furniture ================= */
+
+defProp('table_round', 'Round Table', 'furniture', { size: 1.4 }, (ctx, u, rnd) => {
+  const r = u * 0.62;
+  circ(ctx, 0, 0, r); shp(ctx, WOOD_M, OUTLINE, u * 0.035);
+  circ(ctx, 0, 0, r * 0.82); shp(ctx, WOOD_L, 'rgba(0,0,0,0.2)', u * 0.02);
+  circ(ctx, -r * 0.2, -r * 0.2, r * 0.28); shp(ctx, 'rgba(255,255,255,0.07)', null);
+});
+
+defProp('table_long', 'Long Table', 'furniture', { size: 2 }, (ctx, u, rnd) => {
+  const w = u * 2.0, h = u * 0.9;
+  rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.08); shp(ctx, WOOD_M, OUTLINE, u * 0.035);
+  rectPath(ctx, -w / 2 + u * 0.07, -h / 2 + u * 0.07, w - u * 0.14, h - u * 0.14, u * 0.05);
+  shp(ctx, WOOD_L, null);
+  grain(ctx, -w / 2 + u * 0.07, -h / 2 + u * 0.07, w - u * 0.14, h - u * 0.14, 5, 'rgba(0,0,0,0.18)', true);
+});
+
+defProp('chair', 'Chair', 'furniture', { size: 0.7 }, (ctx, u) => {
+  const s = u * 0.5;
+  rectPath(ctx, -s / 2, -s / 2, s, s, u * 0.05); shp(ctx, WOOD_M, OUTLINE, u * 0.03);
+  rectPath(ctx, -s / 2, -s / 2 - u * 0.11, s, u * 0.13, u * 0.04); shp(ctx, WOOD_D, OUTLINE, u * 0.025);
+});
+
+defProp('stool', 'Stool', 'furniture', { size: 0.5 }, (ctx, u) => {
+  circ(ctx, 0, 0, u * 0.21); shp(ctx, WOOD_L, OUTLINE, u * 0.03);
+  circ(ctx, 0, 0, u * 0.1); shp(ctx, 'rgba(0,0,0,0.18)', null);
+});
+
+defProp('bench', 'Bench', 'furniture', { size: 1.6 }, (ctx, u) => {
+  const w = u * 1.5, h = u * 0.38;
+  rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.04); shp(ctx, WOOD_M, OUTLINE, u * 0.03);
+  grain(ctx, -w / 2, -h / 2, w, h, 3, 'rgba(0,0,0,0.2)', false);
+});
+
+defProp('bed', 'Bed', 'furniture', { size: 2 }, (ctx, u) => {
+  const w = u * 1.05, h = u * 1.9;
+  rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.06); shp(ctx, WOOD_D, OUTLINE, u * 0.035);
+  rectPath(ctx, -w / 2 + u * 0.06, -h / 2 + u * 0.18, w - u * 0.12, h - u * 0.26, u * 0.05);
+  shp(ctx, '#8d6d55', 'rgba(0,0,0,0.25)', u * 0.02);
+  rectPath(ctx, -w / 2 + u * 0.06, -h / 2 + u * 0.12, w - u * 0.12, u * 0.34, u * 0.05);
+  shp(ctx, '#e2dbc8', 'rgba(0,0,0,0.2)', u * 0.02);
+  rectPath(ctx, -w / 2 + u * 0.06, h * 0.02, w - u * 0.12, h * 0.42, u * 0.04);
+  shp(ctx, '#7b3f3f', 'rgba(0,0,0,0.2)', u * 0.02);
+});
+
+defProp('bookshelf', 'Bookshelf', 'furniture', { size: 1.6 }, (ctx, u, rnd) => {
+  const w = u * 1.5, h = u * 0.55;
+  rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.03); shp(ctx, WOOD_D, OUTLINE, u * 0.035);
+  const cols = ['#7d3b3b', '#3b5a7d', '#3b7d55', '#7d6b3b', '#5c3b7d'];
+  let x = -w / 2 + u * 0.06;
+  let i = 0;
+  while (x < w / 2 - u * 0.08) {
+    const bw = u * (0.05 + rnd(i) * 0.05);
+    rectPath(ctx, x, -h / 2 + u * 0.07, bw, h - u * 0.14, 0);
+    shp(ctx, cols[Math.floor(rnd(i + 40) * cols.length)], 'rgba(0,0,0,0.3)', u * 0.015);
+    x += bw + u * 0.012; i++;
+  }
+});
+
+defProp('desk', 'Desk', 'furniture', { size: 1.5 }, (ctx, u) => {
+  const w = u * 1.4, h = u * 0.75;
+  rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.04); shp(ctx, WOOD_M, OUTLINE, u * 0.035);
+  rectPath(ctx, -w * 0.3, -h * 0.24, w * 0.36, h * 0.42, u * 0.02); shp(ctx, '#e8e0c8', 'rgba(0,0,0,0.3)', u * 0.015);
+  circ(ctx, w * 0.26, 0, u * 0.06); shp(ctx, '#2b2b33', null);
+});
+
+defProp('bar_counter', 'Bar Counter', 'furniture', { size: 3 }, (ctx, u) => {
+  const w = u * 3, h = u * 0.85;
+  rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.06); shp(ctx, WOOD_D, OUTLINE, u * 0.04);
+  rectPath(ctx, -w / 2 + u * 0.06, -h / 2 + u * 0.06, w - u * 0.12, h - u * 0.12, u * 0.04);
+  shp(ctx, WOOD_L, 'rgba(0,0,0,0.25)', u * 0.02);
+  grain(ctx, -w / 2 + u * 0.06, -h / 2 + u * 0.06, w - u * 0.12, h - u * 0.12, 8, 'rgba(0,0,0,0.15)', true);
+});
+
+defProp('throne', 'Throne', 'furniture', { size: 1.2 }, (ctx, u) => {
+  const s = u * 0.8;
+  rectPath(ctx, -s / 2, -s / 2 - u * 0.18, s, s + u * 0.18, u * 0.06); shp(ctx, '#57524a', OUTLINE, u * 0.035);
+  rectPath(ctx, -s * 0.34, -s * 0.32, s * 0.68, s * 0.72, u * 0.04); shp(ctx, '#7d2f2f', 'rgba(0,0,0,0.3)', u * 0.02);
+  circ(ctx, 0, -s * 0.5, u * 0.09); shp(ctx, '#c9a227', 'rgba(0,0,0,0.35)', u * 0.02);
+});
+
+defProp('rug', 'Rug', 'furniture', { size: 2.4, under: true }, (ctx, u, rnd) => {
+  const w = u * 2.3, h = u * 1.6;
+  rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.03); shp(ctx, '#7a2a2a', 'rgba(0,0,0,0.35)', u * 0.03);
+  rectPath(ctx, -w / 2 + u * 0.1, -h / 2 + u * 0.1, w - u * 0.2, h - u * 0.2, 0);
+  shp(ctx, null, '#c9a227', u * 0.035);
+  rectPath(ctx, -w / 2 + u * 0.22, -h / 2 + u * 0.22, w - u * 0.44, h - u * 0.44, 0);
+  shp(ctx, '#8f3535', '#c9a227', u * 0.02);
+});
+
+defProp('fireplace', 'Fireplace', 'structure', { size: 2, light: { range: 5, color: '#ff9d4c', intensity: 0.9 } }, (ctx, u) => {
+  const w = u * 1.9, h = u * 0.9;
+  rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.04); shp(ctx, '#57524a', OUTLINE, u * 0.04);
+  rectPath(ctx, -w * 0.33, -h * 0.16, w * 0.66, h * 0.62, u * 0.04); shp(ctx, '#1c1a18', null);
+  ctx.globalAlpha = 0.95;
+  blob(ctx, u * 0.24, 9, 0.5, seededFn(3)); ctx.translate(0, h * 0.12);
+  shp(ctx, '#ff8a2b', null); ctx.translate(0, -h * 0.12);
+  ctx.globalAlpha = 1;
+});
+
+/* ================= Containers & dungeon dressing ================= */
+
+defProp('barrel', 'Barrel', 'dressing', { size: 0.85 }, (ctx, u) => {
+  circ(ctx, 0, 0, u * 0.36); shp(ctx, WOOD_M, OUTLINE, u * 0.035);
+  circ(ctx, 0, 0, u * 0.29); shp(ctx, null, METAL_M, u * 0.045);
+  circ(ctx, 0, 0, u * 0.16); shp(ctx, WOOD_L, 'rgba(0,0,0,0.3)', u * 0.02);
+});
+
+defProp('keg', 'Keg', 'dressing', { size: 0.9 }, (ctx, u) => {
+  rectPath(ctx, -u * 0.42, -u * 0.3, u * 0.84, u * 0.6, u * 0.14); shp(ctx, WOOD_M, OUTLINE, u * 0.035);
+  ctx.beginPath(); ctx.moveTo(-u * 0.14, -u * 0.3); ctx.lineTo(-u * 0.14, u * 0.3);
+  ctx.moveTo(u * 0.14, -u * 0.3); ctx.lineTo(u * 0.14, u * 0.3);
+  shp(ctx, null, METAL_M, u * 0.05);
+});
+
+defProp('crate', 'Crate', 'dressing', { size: 0.9 }, (ctx, u) => {
+  const s = u * 0.72;
+  rectPath(ctx, -s / 2, -s / 2, s, s, u * 0.03); shp(ctx, WOOD_L, OUTLINE, u * 0.035);
+  ctx.beginPath();
+  ctx.moveTo(-s / 2, -s / 2); ctx.lineTo(s / 2, s / 2);
+  ctx.moveTo(s / 2, -s / 2); ctx.lineTo(-s / 2, s / 2);
+  shp(ctx, null, 'rgba(0,0,0,0.35)', u * 0.03);
+});
+
+defProp('chest', 'Chest', 'dressing', { size: 1 }, (ctx, u) => {
+  const w = u * 0.8, h = u * 0.55;
+  rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.04); shp(ctx, WOOD_D, OUTLINE, u * 0.035);
+  rectPath(ctx, -w / 2 + u * 0.05, -h / 2 + u * 0.05, w - u * 0.1, h - u * 0.1, u * 0.03);
+  shp(ctx, WOOD_M, null);
+  rectPath(ctx, -u * 0.07, -h / 2, u * 0.14, h, 0); shp(ctx, '#c9a227', 'rgba(0,0,0,0.35)', u * 0.02);
+});
+
+defProp('sack', 'Sack', 'dressing', { size: 0.6 }, (ctx, u, rnd) => {
+  blob(ctx, u * 0.25, 8, 0.35, rnd); shp(ctx, '#a3906a', OUTLINE, u * 0.03);
+  circ(ctx, 0, -u * 0.14, u * 0.07); shp(ctx, '#7d6d4f', null);
+});
+
+defProp('pot', 'Clay Pot', 'dressing', { size: 0.55 }, (ctx, u) => {
+  circ(ctx, 0, 0, u * 0.2); shp(ctx, '#a3603f', OUTLINE, u * 0.03);
+  circ(ctx, 0, 0, u * 0.1); shp(ctx, '#3a2418', null);
+});
+
+defProp('bones', 'Bones', 'dressing', { size: 0.8 }, (ctx, u, rnd) => {
+  ctx.strokeStyle = '#ddd6c2'; ctx.lineWidth = u * 0.055; ctx.lineCap = 'round';
+  for (let i = 0; i < 4; i++) {
+    const a = rnd(i) * Math.PI * 2, l = u * (0.1 + rnd(i + 9) * 0.2);
+    const cx = (rnd(i + 3) - 0.5) * u * 0.4, cy = (rnd(i + 6) - 0.5) * u * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(cx - Math.cos(a) * l, cy - Math.sin(a) * l);
+    ctx.lineTo(cx + Math.cos(a) * l, cy + Math.sin(a) * l);
+    ctx.stroke();
+  }
+});
+
+defProp('skull', 'Skull', 'dressing', { size: 0.5 }, (ctx, u) => {
+  circ(ctx, 0, -u * 0.02, u * 0.17); shp(ctx, '#e4ddca', 'rgba(0,0,0,0.4)', u * 0.02);
+  circ(ctx, -u * 0.06, -u * 0.02, u * 0.045); shp(ctx, '#2a2620', null);
+  circ(ctx, u * 0.06, -u * 0.02, u * 0.045); shp(ctx, '#2a2620', null);
+  rectPath(ctx, -u * 0.07, u * 0.1, u * 0.14, u * 0.07, u * 0.02); shp(ctx, '#e4ddca', 'rgba(0,0,0,0.35)', u * 0.015);
+});
+
+defProp('rubble_pile', 'Rubble Pile', 'dressing', { size: 1 }, (ctx, u, rnd) => {
+  for (let i = 0; i < 7; i++) {
+    const cx = (rnd(i) - 0.5) * u * 0.7, cy = (rnd(i + 11) - 0.5) * u * 0.7;
+    ctx.save(); ctx.translate(cx, cy);
+    blob(ctx, u * (0.06 + rnd(i + 5) * 0.09), 6, 0.5, seededFn(i));
+    shp(ctx, rgb(mixRGB([90, 85, 76], [130, 124, 112], rnd(i + 21))), 'rgba(0,0,0,0.35)', u * 0.018);
+    ctx.restore();
+  }
+});
+
+defProp('pillar', 'Pillar', 'structure', { size: 1, blocks: true }, (ctx, u) => {
+  circ(ctx, 0, 0, u * 0.4); shp(ctx, '#6f6a60', 'rgba(0,0,0,0.6)', u * 0.045);
+  circ(ctx, 0, 0, u * 0.29); shp(ctx, '#8b8578', 'rgba(0,0,0,0.25)', u * 0.02);
+  circ(ctx, -u * 0.09, -u * 0.09, u * 0.12); shp(ctx, 'rgba(255,255,255,0.09)', null);
+});
+
+defProp('pillar_broken', 'Broken Pillar', 'structure', { size: 0.9 }, (ctx, u, rnd) => {
+  blob(ctx, u * 0.32, 9, 0.4, rnd); shp(ctx, '#6f6a60', 'rgba(0,0,0,0.5)', u * 0.04);
+  blob(ctx, u * 0.19, 8, 0.35, seededFn(4)); shp(ctx, '#565149', null);
+});
+
+defProp('statue', 'Statue', 'structure', { size: 1, blocks: true }, (ctx, u) => {
+  circ(ctx, 0, 0, u * 0.4); shp(ctx, '#5e594f', 'rgba(0,0,0,0.55)', u * 0.04);
+  ctx.save();
+  ctx.fillStyle = '#9c968a';
+  circ(ctx, 0, -u * 0.13, u * 0.1); ctx.fill();
+  rectPath(ctx, -u * 0.12, -u * 0.05, u * 0.24, u * 0.3, u * 0.06); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = u * 0.02; ctx.stroke();
+  ctx.restore();
+});
+
+defProp('altar', 'Altar', 'structure', { size: 1.6 }, (ctx, u) => {
+  const w = u * 1.4, h = u * 0.8;
+  rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.04); shp(ctx, '#5e594f', 'rgba(0,0,0,0.6)', u * 0.045);
+  rectPath(ctx, -w / 2 + u * 0.08, -h / 2 + u * 0.08, w - u * 0.16, h - u * 0.16, u * 0.03);
+  shp(ctx, '#8b8578', 'rgba(0,0,0,0.25)', u * 0.02);
+  circ(ctx, 0, 0, u * 0.14); shp(ctx, '#7a2a2a', 'rgba(0,0,0,0.4)', u * 0.025);
+});
+
+defProp('sarcophagus', 'Sarcophagus', 'structure', { size: 2 }, (ctx, u) => {
+  const w = u * 0.95, h = u * 1.9;
+  rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.1); shp(ctx, '#6a655b', 'rgba(0,0,0,0.6)', u * 0.045);
+  rectPath(ctx, -w / 2 + u * 0.08, -h / 2 + u * 0.08, w - u * 0.16, h - u * 0.16, u * 0.08);
+  shp(ctx, '#898274', 'rgba(0,0,0,0.3)', u * 0.02);
+  circ(ctx, 0, -h * 0.28, u * 0.13); shp(ctx, '#6a655b', 'rgba(0,0,0,0.3)', u * 0.02);
+  rectPath(ctx, -u * 0.04, -h * 0.12, u * 0.08, h * 0.42, u * 0.02); shp(ctx, '#6a655b', null);
+});
+
+defProp('coffin', 'Coffin', 'structure', { size: 1.8 }, (ctx, u) => {
+  const w = u * 0.75, h = u * 1.7;
+  ctx.beginPath();
+  ctx.moveTo(-w * 0.35, -h / 2); ctx.lineTo(w * 0.35, -h / 2);
+  ctx.lineTo(w / 2, -h * 0.2); ctx.lineTo(w * 0.3, h / 2);
+  ctx.lineTo(-w * 0.3, h / 2); ctx.lineTo(-w / 2, -h * 0.2);
+  ctx.closePath(); shp(ctx, WOOD_D, 'rgba(0,0,0,0.55)', u * 0.04);
+  grain(ctx, -w / 2, -h / 2, w, h, 4, 'rgba(0,0,0,0.25)', true);
+});
+
+defProp('gravestone', 'Gravestone', 'structure', { size: 0.8 }, (ctx, u) => {
+  ctx.beginPath(); ctx.moveTo(-u * 0.2, u * 0.25); ctx.lineTo(-u * 0.2, -u * 0.1);
+  ctx.arc(0, -u * 0.1, u * 0.2, Math.PI, 0); ctx.lineTo(u * 0.2, u * 0.25); ctx.closePath();
+  shp(ctx, '#7a746a', 'rgba(0,0,0,0.5)', u * 0.035);
+  ctx.beginPath(); ctx.moveTo(0, -u * 0.16); ctx.lineTo(0, u * 0.08);
+  ctx.moveTo(-u * 0.07, -u * 0.06); ctx.lineTo(u * 0.07, -u * 0.06);
+  shp(ctx, null, 'rgba(0,0,0,0.3)', u * 0.03);
+});
+
+defProp('anvil', 'Anvil', 'dressing', { size: 0.9 }, (ctx, u) => {
+  ctx.beginPath();
+  ctx.moveTo(-u * 0.34, -u * 0.12); ctx.lineTo(u * 0.36, -u * 0.08);
+  ctx.lineTo(u * 0.2, u * 0.06); ctx.lineTo(u * 0.16, u * 0.2);
+  ctx.lineTo(-u * 0.18, u * 0.2); ctx.lineTo(-u * 0.22, u * 0.04);
+  ctx.closePath(); shp(ctx, METAL_D, 'rgba(0,0,0,0.5)', u * 0.035);
+  ctx.beginPath(); ctx.moveTo(-u * 0.3, -u * 0.1); ctx.lineTo(u * 0.3, -u * 0.07);
+  shp(ctx, null, METAL_L, u * 0.03);
+});
+
+defProp('weapon_rack', 'Weapon Rack', 'dressing', { size: 1.3 }, (ctx, u) => {
+  const w = u * 1.2, h = u * 0.35;
+  rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.03); shp(ctx, WOOD_D, OUTLINE, u * 0.03);
+  ctx.strokeStyle = METAL_L; ctx.lineWidth = u * 0.04;
+  for (let i = 0; i < 4; i++) {
+    const x = -w / 2 + w * (i + 0.5) / 4;
+    ctx.beginPath(); ctx.moveTo(x, -h * 0.7); ctx.lineTo(x, h * 0.7); ctx.stroke();
+  }
+});
+
+defProp('cauldron', 'Cauldron', 'dressing', { size: 0.9 }, (ctx, u) => {
+  circ(ctx, 0, 0, u * 0.33); shp(ctx, '#2e3238', 'rgba(0,0,0,0.55)', u * 0.04);
+  circ(ctx, 0, 0, u * 0.24); shp(ctx, '#4a7a4f', 'rgba(0,0,0,0.3)', u * 0.02);
+  circ(ctx, -u * 0.07, -u * 0.06, u * 0.06); shp(ctx, 'rgba(255,255,255,0.12)', null);
+});
+
+defProp('cart', 'Cart', 'dressing', { size: 2 }, (ctx, u) => {
+  const w = u * 1.7, h = u * 0.95;
+  rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.04); shp(ctx, WOOD_M, OUTLINE, u * 0.04);
+  rectPath(ctx, -w / 2 + u * 0.08, -h / 2 + u * 0.08, w - u * 0.16, h - u * 0.16, u * 0.02);
+  shp(ctx, WOOD_D, null);
+  grain(ctx, -w / 2 + u * 0.08, -h / 2 + u * 0.08, w - u * 0.16, h - u * 0.16, 6, 'rgba(0,0,0,0.25)', true);
+  for (const sy of [-1, 1]) { circ(ctx, -w * 0.18, sy * h * 0.56, u * 0.2); shp(ctx, '#3a2a1c', 'rgba(0,0,0,0.5)', u * 0.03); }
+});
+
+defProp('ladder', 'Ladder', 'structure', { size: 1.6 }, (ctx, u) => {
+  const w = u * 0.5, h = u * 1.5;
+  ctx.strokeStyle = WOOD_L; ctx.lineWidth = u * 0.07;
+  ctx.beginPath(); ctx.moveTo(-w / 2, -h / 2); ctx.lineTo(-w / 2, h / 2);
+  ctx.moveTo(w / 2, -h / 2); ctx.lineTo(w / 2, h / 2); ctx.stroke();
+  ctx.lineWidth = u * 0.05;
+  for (let i = 0; i <= 5; i++) {
+    const y = -h / 2 + (h * i) / 5;
+    ctx.beginPath(); ctx.moveTo(-w / 2, y); ctx.lineTo(w / 2, y); ctx.stroke();
+  }
+});
+
+defProp('stairs_up', 'Stairs', 'structure', { size: 2 }, (ctx, u) => {
+  const w = u * 1.5, h = u * 1.9;
+  rectPath(ctx, -w / 2, -h / 2, w, h, 0); shp(ctx, '#6b6559', 'rgba(0,0,0,0.5)', u * 0.04);
+  ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = u * 0.035;
+  for (let i = 1; i < 7; i++) {
+    const y = -h / 2 + (h * i) / 7;
+    ctx.beginPath(); ctx.moveTo(-w / 2, y); ctx.lineTo(w / 2, y); ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.10)';
+  ctx.beginPath(); ctx.moveTo(-w / 2, -h / 2); ctx.lineTo(w / 2, -h / 2); ctx.lineTo(0, 0); ctx.closePath(); ctx.fill();
+});
+
+defProp('well', 'Well', 'structure', { size: 1.5, blocks: true }, (ctx, u) => {
+  circ(ctx, 0, 0, u * 0.62); shp(ctx, '#6b6559', 'rgba(0,0,0,0.55)', u * 0.05);
+  circ(ctx, 0, 0, u * 0.46); shp(ctx, '#4a463f', null);
+  circ(ctx, 0, 0, u * 0.34); shp(ctx, '#1b2a33', null);
+  circ(ctx, -u * 0.1, -u * 0.1, u * 0.09); shp(ctx, 'rgba(120,190,220,0.25)', null);
+});
+
+defProp('fountain', 'Fountain', 'structure', { size: 2, blocks: true }, (ctx, u) => {
+  circ(ctx, 0, 0, u * 0.9); shp(ctx, '#7a746a', 'rgba(0,0,0,0.5)', u * 0.05);
+  circ(ctx, 0, 0, u * 0.72); shp(ctx, '#35708a', 'rgba(0,0,0,0.3)', u * 0.03);
+  circ(ctx, 0, 0, u * 0.24); shp(ctx, '#8b8578', 'rgba(0,0,0,0.35)', u * 0.03);
+  circ(ctx, -u * 0.25, -u * 0.25, u * 0.16); shp(ctx, 'rgba(255,255,255,0.14)', null);
+});
+
+defProp('cage', 'Cage', 'structure', { size: 1.3 }, (ctx, u) => {
+  const s = u * 1.05;
+  rectPath(ctx, -s / 2, -s / 2, s, s, u * 0.04); shp(ctx, 'rgba(20,20,24,0.5)', METAL_D, u * 0.05);
+  ctx.strokeStyle = METAL_M; ctx.lineWidth = u * 0.035;
+  for (let i = 1; i < 5; i++) {
+    const x = -s / 2 + (s * i) / 5;
+    ctx.beginPath(); ctx.moveTo(x, -s / 2); ctx.lineTo(x, s / 2); ctx.stroke();
+  }
+});
+
+defProp('banner', 'Banner', 'structure', { size: 1 }, (ctx, u) => {
+  const w = u * 0.5, h = u * 0.9;
+  ctx.beginPath();
+  ctx.moveTo(-w / 2, -h / 2); ctx.lineTo(w / 2, -h / 2); ctx.lineTo(w / 2, h * 0.3);
+  ctx.lineTo(0, h / 2); ctx.lineTo(-w / 2, h * 0.3); ctx.closePath();
+  shp(ctx, '#6b2230', 'rgba(0,0,0,0.45)', u * 0.03);
+  circ(ctx, 0, -h * 0.08, u * 0.1); shp(ctx, '#c9a227', null);
+});
+
+defProp('spiderweb', 'Spider Web', 'dressing', { size: 1.4, under: true }, (ctx, u) => {
+  ctx.strokeStyle = 'rgba(228,228,235,0.5)'; ctx.lineWidth = u * 0.02;
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * u * 0.65, Math.sin(a) * u * 0.65); ctx.stroke();
+  }
+  for (let r = 0.18; r < 0.7; r += 0.16) {
+    ctx.beginPath();
+    for (let i = 0; i <= 7; i++) {
+      const a = (i / 7) * Math.PI * 2;
+      const px = Math.cos(a) * u * r, py = Math.sin(a) * u * r;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath(); ctx.stroke();
+  }
+});
+
+/* ================= Lights ================= */
+
+defProp('brazier', 'Brazier', 'light', { size: 0.9, light: { range: 4.5, color: '#ff9d4c', intensity: 1 } }, (ctx, u) => {
+  circ(ctx, 0, 0, u * 0.34); shp(ctx, '#3c4048', 'rgba(0,0,0,0.55)', u * 0.04);
+  circ(ctx, 0, 0, u * 0.24); shp(ctx, '#ff7a1a', null);
+  circ(ctx, 0, 0, u * 0.13); shp(ctx, '#ffe08a', null);
+});
+
+defProp('campfire', 'Campfire', 'light', { size: 1, light: { range: 5, color: '#ff8f3c', intensity: 1 } }, (ctx, u, rnd) => {
+  // ring of stones
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + rnd(i) * 0.3;
+    circ(ctx, Math.cos(a) * u * 0.34, Math.sin(a) * u * 0.34, u * (0.055 + rnd(i + 5) * 0.03));
+    shp(ctx, '#6d675d', 'rgba(0,0,0,0.4)', u * 0.018);
+  }
+  // logs stacked into the fire, not spokes
+  ctx.strokeStyle = WOOD_D; ctx.lineWidth = u * 0.06; ctx.lineCap = 'round';
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI + 0.4;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * u * 0.22, Math.sin(a) * u * 0.22);
+    ctx.lineTo(-Math.cos(a) * u * 0.22, -Math.sin(a) * u * 0.22);
+    ctx.stroke();
+  }
+  blob(ctx, u * 0.19, 9, 0.5, rnd); shp(ctx, '#ff7a1a', null);
+  blob(ctx, u * 0.1, 7, 0.5, seededFn(2)); shp(ctx, '#ffe08a', null);
+});
+
+defProp('torch', 'Wall Torch', 'light', { size: 0.5, light: { range: 4, color: '#ff9d4c', intensity: 0.85 } }, (ctx, u) => {
+  rectPath(ctx, -u * 0.05, -u * 0.02, u * 0.1, u * 0.26, u * 0.02); shp(ctx, WOOD_D, 'rgba(0,0,0,0.4)', u * 0.02);
+  circ(ctx, 0, -u * 0.08, u * 0.13); shp(ctx, '#ff7a1a', null);
+  circ(ctx, 0, -u * 0.09, u * 0.07); shp(ctx, '#ffe8a8', null);
+});
+
+defProp('lantern', 'Lantern', 'light', { size: 0.5, light: { range: 3.5, color: '#ffd08a', intensity: 0.8 } }, (ctx, u) => {
+  rectPath(ctx, -u * 0.11, -u * 0.13, u * 0.22, u * 0.26, u * 0.04); shp(ctx, METAL_D, 'rgba(0,0,0,0.45)', u * 0.025);
+  rectPath(ctx, -u * 0.06, -u * 0.08, u * 0.12, u * 0.16, u * 0.02); shp(ctx, '#ffdf9e', null);
+});
+
+defProp('candles', 'Candles', 'light', { size: 0.4, light: { range: 2, color: '#ffe0a0', intensity: 0.5 } }, (ctx, u, rnd) => {
+  for (let i = 0; i < 3; i++) {
+    const cx = (rnd(i) - 0.5) * u * 0.25, cy = (rnd(i + 5) - 0.5) * u * 0.25;
+    circ(ctx, cx, cy, u * 0.05); shp(ctx, '#efe6cd', 'rgba(0,0,0,0.35)', u * 0.015);
+    circ(ctx, cx, cy, u * 0.022); shp(ctx, '#ffd76b', null);
+  }
+});
+
+defProp('crystal', 'Glowing Crystal', 'light', { size: 0.8, light: { range: 4, color: '#7fd8ff', intensity: 0.8 } }, (ctx, u, rnd) => {
+  for (let i = 0; i < 3; i++) {
+    const a = rnd(i) * Math.PI * 2, d = u * 0.12;
+    ctx.save(); ctx.translate(Math.cos(a) * d, Math.sin(a) * d); ctx.rotate(rnd(i + 3) * Math.PI);
+    ctx.beginPath();
+    ctx.moveTo(0, -u * 0.24); ctx.lineTo(u * 0.1, 0); ctx.lineTo(0, u * 0.2); ctx.lineTo(-u * 0.1, 0);
+    ctx.closePath(); shp(ctx, '#6fc6e8', 'rgba(255,255,255,0.5)', u * 0.02);
+    ctx.restore();
+  }
+});
+
+/* ================= Nature ================= */
+
+function drawFoliage(ctx, u, rnd, cols, r) {
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + rnd(i) * 0.7;
+    const d = r * (0.18 + rnd(i + 4) * 0.3);
+    ctx.save(); ctx.translate(Math.cos(a) * d, Math.sin(a) * d);
+    blob(ctx, r * (0.5 + rnd(i + 8) * 0.28), 9, 0.35, seededFn(i * 13));
+    shp(ctx, cols[i % cols.length], null);
+    ctx.restore();
+  }
+}
+
+defProp('tree_oak', 'Oak Tree', 'nature', { size: 2.2, blocks: true }, (ctx, u, rnd) => {
+  ctx.save(); ctx.globalAlpha = 0.35; ctx.translate(u * 0.09, u * 0.09);
+  blob(ctx, u * 0.95, 11, 0.3, rnd); shp(ctx, '#000', null); ctx.restore();
+  drawFoliage(ctx, u, rnd, ['#2f5a28', '#3c7033', '#4a8a3d', '#356b2d'], u * 0.95);
+  circ(ctx, 0, 0, u * 0.16); shp(ctx, '#4a3320', null);
+});
+
+defProp('tree_pine', 'Pine Tree', 'nature', { size: 1.8, blocks: true }, (ctx, u, rnd) => {
+  ctx.save(); ctx.globalAlpha = 0.35; ctx.translate(u * 0.08, u * 0.08);
+  blob(ctx, u * 0.72, 9, 0.2, rnd); shp(ctx, '#000', null); ctx.restore();
+  // three tiers of needle-fringed boughs, each turned a little
+  const tiers = [[0.80, '#1d4524'], [0.60, '#2a5c30'], [0.40, '#38743d']];
+  tiers.forEach(([f, col], i) => {
+    const r = u * f, spikes = 13, twist = i * 0.24;
+    ctx.beginPath();
+    for (let k = 0; k <= spikes * 2; k++) {
+      const a = (k / (spikes * 2)) * Math.PI * 2 + twist;
+      const rr = r * (k % 2 === 0 ? 1 : 0.52);
+      const px = Math.cos(a) * rr, py = Math.sin(a) * rr;
+      if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    shp(ctx, col, i === 0 ? 'rgba(0,0,0,0.35)' : null, u * 0.02);
+  });
+  circ(ctx, 0, 0, u * 0.07); shp(ctx, '#4a3a26', null);
+});
+
+defProp('tree_dead', 'Dead Tree', 'nature', { size: 1.8, blocks: true }, (ctx, u, rnd) => {
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + rnd(i) * 0.5;
+    const l = u * (0.34 + rnd(i + 3) * 0.36);
+    // thick limb tapering into thin twigs
+    ctx.strokeStyle = '#463b2e'; ctx.lineWidth = u * 0.1;
+    ctx.beginPath(); ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(Math.cos(a) * l * 0.55, Math.sin(a) * l * 0.55,
+      Math.cos(a + 0.35) * l, Math.sin(a + 0.35) * l);
+    ctx.stroke();
+    ctx.strokeStyle = '#5a4c3b'; ctx.lineWidth = u * 0.035;
+    for (const s of [-0.5, 0.5]) {
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a + 0.3) * l * 0.8, Math.sin(a + 0.3) * l * 0.8);
+      ctx.lineTo(Math.cos(a + 0.35 + s * 0.4) * l * 1.25, Math.sin(a + 0.35 + s * 0.4) * l * 1.25);
+      ctx.stroke();
+    }
+  }
+  circ(ctx, 0, 0, u * 0.17); shp(ctx, '#3d3428', 'rgba(0,0,0,0.45)', u * 0.025);
+  circ(ctx, 0, 0, u * 0.08); shp(ctx, '#2a241b', null);
+});
+
+defProp('palm', 'Palm Tree', 'nature', { size: 1.8, blocks: true }, (ctx, u, rnd) => {
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + rnd(i) * 0.4;
+    ctx.beginPath(); ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(Math.cos(a) * u * 0.4, Math.sin(a) * u * 0.4,
+      Math.cos(a + 0.3) * u * 0.8, Math.sin(a + 0.3) * u * 0.8);
+    ctx.lineTo(Math.cos(a - 0.15) * u * 0.75, Math.sin(a - 0.15) * u * 0.75);
+    ctx.closePath(); shp(ctx, i % 2 ? '#3d7a3a' : '#4d8f45', 'rgba(0,0,0,0.2)', u * 0.015);
+  }
+  circ(ctx, 0, 0, u * 0.12); shp(ctx, '#6b4f30', null);
+});
+
+defProp('bush', 'Bush', 'nature', { size: 1 }, (ctx, u, rnd) => {
+  drawFoliage(ctx, u, rnd, ['#37652e', '#437a38', '#4f8f42'], u * 0.42);
+});
+
+defProp('flowers', 'Flowers', 'nature', { size: 0.7, under: true }, (ctx, u, rnd) => {
+  const cols = ['#e8d34a', '#e07ba8', '#9a7fe0', '#e8e8e8'];
+  for (let i = 0; i < 6; i++) {
+    const cx = (rnd(i) - 0.5) * u * 0.6, cy = (rnd(i + 7) - 0.5) * u * 0.6;
+    circ(ctx, cx, cy, u * 0.045); shp(ctx, cols[Math.floor(rnd(i + 3) * cols.length)], null);
+  }
+});
+
+defProp('rock', 'Boulder', 'nature', { size: 1.1, blocks: true }, (ctx, u, rnd) => {
+  ctx.save(); ctx.globalAlpha = 0.35; ctx.translate(u * 0.06, u * 0.06);
+  blob(ctx, u * 0.42, 8, 0.35, rnd); shp(ctx, '#000', null); ctx.restore();
+  blob(ctx, u * 0.42, 8, 0.35, rnd); shp(ctx, '#6d675d', 'rgba(0,0,0,0.45)', u * 0.03);
+  ctx.save(); ctx.translate(-u * 0.08, -u * 0.08);
+  blob(ctx, u * 0.2, 7, 0.4, seededFn(11)); shp(ctx, 'rgba(255,255,255,0.1)', null); ctx.restore();
+});
+
+defProp('rock_small', 'Small Rocks', 'nature', { size: 0.7 }, (ctx, u, rnd) => {
+  for (let i = 0; i < 3; i++) {
+    ctx.save();
+    ctx.translate((rnd(i) - 0.5) * u * 0.5, (rnd(i + 6) - 0.5) * u * 0.5);
+    blob(ctx, u * (0.08 + rnd(i + 2) * 0.07), 7, 0.4, seededFn(i * 7));
+    shp(ctx, '#6d675d', 'rgba(0,0,0,0.4)', u * 0.02);
+    ctx.restore();
+  }
+});
+
+defProp('stalagmite', 'Stalagmite', 'nature', { size: 0.9, blocks: true }, (ctx, u, rnd) => {
+  for (let i = 0; i < 3; i++) {
+    const cx = (rnd(i) - 0.5) * u * 0.4, cy = (rnd(i + 4) - 0.5) * u * 0.4;
+    ctx.save(); ctx.translate(cx, cy);
+    blob(ctx, u * (0.1 + rnd(i + 8) * 0.1), 7, 0.3, seededFn(i * 5));
+    shp(ctx, '#5b554c', 'rgba(0,0,0,0.5)', u * 0.025);
+    circ(ctx, 0, 0, u * 0.04); shp(ctx, '#8a8377', null);
+    ctx.restore();
+  }
+});
+
+defProp('mushroom', 'Mushrooms', 'nature', { size: 0.6 }, (ctx, u, rnd) => {
+  for (let i = 0; i < 3; i++) {
+    const cx = (rnd(i) - 0.5) * u * 0.4, cy = (rnd(i + 3) - 0.5) * u * 0.4;
+    circ(ctx, cx, cy, u * (0.06 + rnd(i + 9) * 0.05));
+    shp(ctx, i % 2 ? '#8a4a6b' : '#b06a4a', 'rgba(0,0,0,0.35)', u * 0.015);
+  }
+});
+
+defProp('mushroom_glow', 'Glowing Mushrooms', 'light', { size: 0.7, light: { range: 2.5, color: '#7fffd4', intensity: 0.5 } }, (ctx, u, rnd) => {
+  for (let i = 0; i < 4; i++) {
+    const cx = (rnd(i) - 0.5) * u * 0.5, cy = (rnd(i + 3) - 0.5) * u * 0.5;
+    circ(ctx, cx, cy, u * (0.05 + rnd(i + 9) * 0.05));
+    shp(ctx, '#6fe3c0', 'rgba(255,255,255,0.4)', u * 0.015);
+  }
+});
+
+defProp('reeds', 'Reeds', 'nature', { size: 0.8 }, (ctx, u, rnd) => {
+  ctx.strokeStyle = '#6f8a3f'; ctx.lineWidth = u * 0.025; ctx.lineCap = 'round';
+  for (let i = 0; i < 8; i++) {
+    const cx = (rnd(i) - 0.5) * u * 0.6;
+    ctx.beginPath(); ctx.moveTo(cx, u * 0.25);
+    ctx.quadraticCurveTo(cx + (rnd(i + 4) - 0.5) * u * 0.2, 0, cx + (rnd(i + 9) - 0.5) * u * 0.3, -u * 0.3);
+    ctx.stroke();
+  }
+});
+
+defProp('lilypad', 'Lily Pads', 'nature', { size: 0.9, under: true }, (ctx, u, rnd) => {
+  for (let i = 0; i < 3; i++) {
+    const cx = (rnd(i) - 0.5) * u * 0.55, cy = (rnd(i + 5) - 0.5) * u * 0.55;
+    const r = u * (0.1 + rnd(i + 2) * 0.08);
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0.5, Math.PI * 2 + 0.2); ctx.lineTo(cx, cy); ctx.closePath();
+    shp(ctx, '#3f7a3a', 'rgba(0,0,0,0.3)', u * 0.015);
+  }
+});
+
+defProp('log', 'Fallen Log', 'nature', { size: 1.6 }, (ctx, u) => {
+  const w = u * 1.5, h = u * 0.32;
+  rectPath(ctx, -w / 2, -h / 2, w, h, h / 2); shp(ctx, '#5a4128', 'rgba(0,0,0,0.45)', u * 0.03);
+  circ(ctx, -w / 2 + h * 0.4, 0, h * 0.38); shp(ctx, '#7d5c3a', 'rgba(0,0,0,0.3)', u * 0.02);
+  grain(ctx, -w / 2, -h / 2, w, h, 3, 'rgba(0,0,0,0.2)', false);
+});
+
+defProp('stump', 'Tree Stump', 'nature', { size: 0.8 }, (ctx, u) => {
+  circ(ctx, 0, 0, u * 0.28); shp(ctx, '#5a4128', 'rgba(0,0,0,0.45)', u * 0.03);
+  circ(ctx, 0, 0, u * 0.2); shp(ctx, '#7d5c3a', null);
+  circ(ctx, 0, 0, u * 0.1); shp(ctx, null, 'rgba(0,0,0,0.25)', u * 0.02);
+});
+
+defProp('cactus', 'Cactus', 'nature', { size: 1, blocks: true }, (ctx, u) => {
+  ctx.fillStyle = '#3f7a4a'; ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = u * 0.03;
+  rectPath(ctx, -u * 0.1, -u * 0.3, u * 0.2, u * 0.6, u * 0.1); ctx.fill(); ctx.stroke();
+  rectPath(ctx, -u * 0.3, -u * 0.1, u * 0.2, u * 0.14, u * 0.06); ctx.fill(); ctx.stroke();
+  rectPath(ctx, u * 0.1, -u * 0.2, u * 0.2, u * 0.14, u * 0.06); ctx.fill(); ctx.stroke();
+});
+
+defProp('ice_shard', 'Ice Shard', 'nature', { size: 1, blocks: true }, (ctx, u, rnd) => {
+  for (let i = 0; i < 3; i++) {
+    ctx.save(); ctx.rotate(rnd(i) * Math.PI);
+    ctx.beginPath();
+    ctx.moveTo(0, -u * 0.4); ctx.lineTo(u * 0.15, u * 0.1); ctx.lineTo(0, u * 0.3); ctx.lineTo(-u * 0.15, u * 0.1);
+    ctx.closePath(); shp(ctx, 'rgba(180,225,240,0.8)', 'rgba(255,255,255,0.6)', u * 0.02);
+    ctx.restore();
+  }
+});
+
+defProp('boat', 'Rowboat', 'nature', { size: 2.4 }, (ctx, u) => {
+  const w = u * 0.9, h = u * 2.2;
+  ctx.beginPath();
+  ctx.moveTo(0, -h / 2);
+  ctx.quadraticCurveTo(w / 2, -h * 0.1, w * 0.35, h / 2);
+  ctx.lineTo(-w * 0.35, h / 2);
+  ctx.quadraticCurveTo(-w / 2, -h * 0.1, 0, -h / 2);
+  ctx.closePath(); shp(ctx, '#6b4a2b', 'rgba(0,0,0,0.55)', u * 0.04);
+  ctx.beginPath();
+  ctx.moveTo(0, -h * 0.38);
+  ctx.quadraticCurveTo(w * 0.32, -h * 0.1, w * 0.22, h * 0.38);
+  ctx.lineTo(-w * 0.22, h * 0.38);
+  ctx.quadraticCurveTo(-w * 0.32, -h * 0.1, 0, -h * 0.38);
+  ctx.closePath(); shp(ctx, '#3a2a1c', null);
+  ctx.strokeStyle = '#8a6238'; ctx.lineWidth = u * 0.05;
+  ctx.beginPath(); ctx.moveTo(-w * 0.25, 0); ctx.lineTo(w * 0.25, 0); ctx.stroke();
+});
+
+defProp('mast', 'Mast', 'structure', { size: 1.2, blocks: true }, (ctx, u) => {
+  circ(ctx, 0, 0, u * 0.28); shp(ctx, '#5a4128', 'rgba(0,0,0,0.6)', u * 0.045);
+  circ(ctx, 0, 0, u * 0.16); shp(ctx, '#7d5c3a', null);
+  ctx.strokeStyle = 'rgba(230,225,210,0.5)'; ctx.lineWidth = u * 0.04;
+  ctx.beginPath(); ctx.moveTo(0, -u * 0.55); ctx.lineTo(0, u * 0.55); ctx.stroke();
+});
+
+defProp('anchor', 'Anchor', 'dressing', { size: 0.9 }, (ctx, u) => {
+  ctx.strokeStyle = METAL_M; ctx.lineWidth = u * 0.06; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, -u * 0.3); ctx.lineTo(0, u * 0.25); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, u * 0.12, u * 0.24, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-u * 0.15, -u * 0.18); ctx.lineTo(u * 0.15, -u * 0.18); ctx.stroke();
+});
+
+defProp('crates_stack', 'Crate Stack', 'dressing', { size: 1.4 }, (ctx, u, rnd) => {
+  for (let i = 0; i < 3; i++) {
+    const s = u * (0.45 + rnd(i) * 0.2);
+    ctx.save();
+    ctx.translate((rnd(i + 3) - 0.5) * u * 0.5, (rnd(i + 6) - 0.5) * u * 0.5);
+    ctx.rotate((rnd(i + 9) - 0.5) * 0.6);
+    rectPath(ctx, -s / 2, -s / 2, s, s, u * 0.02); shp(ctx, i % 2 ? WOOD_L : WOOD_M, OUTLINE, u * 0.03);
+    ctx.beginPath(); ctx.moveTo(-s / 2, -s / 2); ctx.lineTo(s / 2, s / 2);
+    shp(ctx, null, 'rgba(0,0,0,0.3)', u * 0.025);
+    ctx.restore();
+  }
+});
+
+defProp('market_stall', 'Market Stall', 'structure', { size: 2.2 }, (ctx, u) => {
+  const w = u * 2.1, h = u * 1.3;
+  rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.04); shp(ctx, '#8a3f3f', 'rgba(0,0,0,0.5)', u * 0.04);
+  ctx.fillStyle = '#e2dbc8';
+  for (let i = 0; i < 5; i++) rectPath(ctx, -w / 2 + (w * (i * 2 + 1)) / 10, -h / 2, w / 10, h, 0), ctx.fill();
+  rectPath(ctx, -w / 2, h * 0.28, w, h * 0.22, u * 0.02); shp(ctx, WOOD_D, 'rgba(0,0,0,0.4)', u * 0.03);
+});
+
+defProp('tent', 'Tent', 'structure', { size: 2.2, blocks: true }, (ctx, u) => {
+  const w = u * 2, h = u * 1.7;
+  ctx.beginPath();
+  ctx.moveTo(0, -h / 2); ctx.lineTo(w / 2, h / 2); ctx.lineTo(-w / 2, h / 2); ctx.closePath();
+  shp(ctx, '#8a7a56', 'rgba(0,0,0,0.5)', u * 0.045);
+  ctx.beginPath(); ctx.moveTo(0, -h / 2); ctx.lineTo(0, h / 2);
+  shp(ctx, null, 'rgba(0,0,0,0.3)', u * 0.035);
+  ctx.beginPath();
+  ctx.moveTo(-u * 0.18, h / 2); ctx.lineTo(0, h * 0.08); ctx.lineTo(u * 0.18, h / 2); ctx.closePath();
+  shp(ctx, '#2b2620', null);
+});
+
+/* Markers that never rotate */
+defProp('marker_a', 'Marker A', 'marker', { size: 0.8, rand: false }, (ctx, u) => {
+  circ(ctx, 0, 0, u * 0.28); shp(ctx, 'rgba(220,60,60,0.85)', '#fff', u * 0.04);
+});
+defProp('marker_num', 'Numbered Point', 'marker', { size: 0.8, rand: false }, (ctx, u) => {
+  circ(ctx, 0, 0, u * 0.26); shp(ctx, 'rgba(30,30,40,0.8)', '#e8c56a', u * 0.04);
+  circ(ctx, 0, 0, u * 0.1); shp(ctx, '#e8c56a', null);
+});
+
+const PROP_CATEGORIES = ['furniture', 'dressing', 'structure', 'light', 'nature', 'marker'];

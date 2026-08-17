@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Battlemap Forge</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ LEFT PANEL ============ -->
+  <nav class="rail" id="railLeft">
+    <div class="raillogo" title="Battlemap Forge">⚒</div>
+    <button data-side="left" data-panel="generate" title="Generate a map (G)">✦</button>
+    <button data-side="left" data-panel="appearance" title="Appearance &amp; lighting">◐</button>
+    <button data-side="left" data-panel="trace" title="Trace an existing map">🖼</button>
+    <button data-side="left" data-panel="export" title="Export">💾</button>
+    <button data-side="left" data-panel="help" title="Shortcuts &amp; VTT notes">?</button>
+  </nav>
+
+  <aside class="panel" id="leftPanel">
+    <div class="brand">
+      <h1>Battlemap Forge</h1>
+      <p>Procedural battlemaps for any VTT</p>
+    </div>
+
+    <section class="group" data-group="generate">
+      <h2>Generate <span class="chev" title="Close this panel">✕</span></h2>
+
+      <label class="field">
+        <span>Map type</span>
+        <select id="mapType"></select>
+      </label>
+
+      <label class="field">
+        <span>Seed</span>
+      </label>
+      <div class="row" style="margin:-6px 0 9px">
+        <input type="text" id="seed" value="ashfall" spellcheck="false">
+        <button id="rerollSeed" class="sm" style="flex:0 0 38px" title="Random seed">🎲</button>
+      </div>
+
+      <div class="row">
+        <label class="field">
+          <span>Width <b id="wLbl">30</b></span>
+          <input type="number" id="mapW" min="8" max="120" value="30">
+        </label>
+        <label class="field">
+          <span>Height <b id="hLbl">22</b></span>
+          <input type="number" id="mapH" min="8" max="120" value="22">
+        </label>
+      </div>
+
+      <label class="field">
+        <span>Grid size <b><span id="ppgLbl">70</span> px</b></span>
+        <select id="ppg">
+          <option value="35">35 px — small files</option>
+          <option value="50">50 px</option>
+          <option value="70" selected>70 px — Roll20 / Foundry standard</option>
+          <option value="100">100 px</option>
+          <option value="140">140 px — print quality</option>
+        </select>
+      </label>
+
+      <div class="divider"></div>
+
+      <label class="field" id="knob-density"><span><i class="knobName">Density</i> <b id="densityLbl">0.5</b></span>
+        <input type="range" id="density" min="0" max="1" step="0.05" value="0.5"></label>
+      <label class="field" id="knob-complexity"><span><i class="knobName">Complexity</i> <b id="complexityLbl">0.5</b></span>
+        <input type="range" id="complexity" min="0" max="1" step="0.05" value="0.5"></label>
+      <label class="field" id="knob-water"><span><i class="knobName">Water</i> <b id="waterLbl">0.3</b></span>
+        <input type="range" id="water" min="0" max="1" step="0.05" value="0.3"></label>
+      <label class="field" id="knob-lava"><span><i class="knobName">Lava</i> <b id="lavaLbl">0</b></span>
+        <input type="range" id="lava" min="0" max="1" step="0.05" value="0"></label>
+      <label class="field" id="knob-props"><span><i class="knobName">Clutter</i> <b id="propsLbl">0.5</b></span>
+        <input type="range" id="propsAmt" min="0" max="1" step="0.05" value="0.5"></label>
+      <p class="hint" id="knobNote" style="margin:2px 0 0"></p>
+
+      <button id="generate" class="primary wide" style="margin-top:6px">Forge Map &nbsp;<kbd>G</kbd></button>
+    </section>
+
+    <section class="group" data-group="appearance">
+      <h2>Appearance <span class="chev" title="Close this panel">✕</span></h2>
+      <label class="check"><input type="checkbox" id="optGrid" checked> Show grid</label>
+      <div class="row">
+        <label class="field"><span>Grid colour</span><input type="color" id="gridColor" value="#000000"></label>
+        <label class="field"><span>Opacity <b id="gridAlphaLbl">0.28</b></span>
+          <input type="range" id="gridAlpha" min="0" max="1" step="0.02" value="0.28"></label>
+      </div>
+      <label class="field"><span>Art style</span>
+        <select id="optStyle">
+          <option value="painted" selected>Painted — warm interiors, grain, graded</option>
+          <option value="clean">Clean — flat and literal</option>
+        </select></label>
+      <label class="check"><input type="checkbox" id="optLighting" checked> Baked lighting</label>
+      <label class="field"><span>Darkness <b id="ambientLbl">0.42</b></span>
+        <input type="range" id="ambient" min="0" max="0.9" step="0.02" value="0.42"></label>
+      <label class="field"><span>Night tint</span><input type="color" id="ambientColor" value="#0a0e1e"></label>
+      <label class="check"><input type="checkbox" id="optRoomLight" checked> Interior room lighting</label>
+      <div class="divider"></div>
+      <h3 class="subhead">Water &amp; lava</h3>
+      <label class="check"><input type="checkbox" id="waterAnimate" checked> Animate water &amp; lava while editing</label>
+      <label class="field"><span>Current direction <b id="waterFlowLbl">216°</b></span>
+        <input type="range" id="waterFlow" min="0" max="1" step="0.02" value="0.6"></label>
+      <label class="field"><span>Current speed <b id="waterSpeedLbl">1.0</b></span>
+        <input type="range" id="waterSpeed" min="0" max="3" step="0.1" value="1"></label>
+      <p class="hint">Exports are still images, so the current shows as caustics, streaks and
+        cracked crust rather than motion. The preview animates so you can aim the flow.
+        Lava creeps at a fraction of the water speed, the way molten rock should.</p>
+      <div class="divider"></div>
+
+      <label class="check"><input type="checkbox" id="optVignette" checked> Vignette</label>
+      <label class="check"><input type="checkbox" id="optShadows" checked> Drop shadows</label>
+      <p class="hint">Turn baked lighting off if your VTT does its own dynamic lighting — the Universal VTT export carries the light sources either way.</p>
+    </section>
+
+    <section class="group" data-group="trace">
+      <h2>Trace an existing map <span class="chev" title="Close this panel">✕</span></h2>
+      <p class="hint" style="margin-top:0">Load any map image (Czepeku, Patreon art, a scan) and paint walls over it, then export a Universal VTT with line-of-sight built in.</p>
+      <input type="file" id="bgFile" accept="image/*" style="display:none">
+      <div class="stack">
+        <button id="bgLoad" class="wide">Load image…</button>
+        <label class="field"><span>Source grid size <b><span id="bgPpgLbl">70</span> px</b></span>
+          <input type="range" id="bgPpg" min="20" max="300" step="1" value="70"></label>
+        <div class="row">
+          <label class="field"><span>Offset X <b id="bgOffXLbl">0</b></span>
+            <input type="range" id="bgOffX" min="-300" max="300" step="1" value="0"></label>
+          <label class="field"><span>Offset Y <b id="bgOffYLbl">0</b></span>
+            <input type="range" id="bgOffY" min="-300" max="300" step="1" value="0"></label>
+        </div>
+        <button id="bgClear" class="wide sm">Remove image</button>
+      </div>
+      <p class="hint">Adjust until the on-screen grid lines up with the art — this matters most, because everything below keys off it.</p>
+
+      <div class="divider"></div>
+      <h3 class="subhead">Automatic tracing</h3>
+      <button id="autoTraceBtn" class="primary wide">Trace walls automatically</button>
+      <label class="field" style="margin-top:9px"><span>Sensitivity <b id="traceSensLbl">0.5</b></span>
+        <input type="range" id="traceSens" min="0" max="1" step="0.05" value="0.5"></label>
+      <label class="check"><input type="checkbox" id="traceWalls" checked> Find walls</label>
+      <label class="check"><input type="checkbox" id="traceOutside" checked> Mark dark areas as outside</label>
+      <label class="check"><input type="checkbox" id="traceBorder" checked> Wall the edge of the artwork</label>
+      <button id="traceClear" class="wide sm">Clear traced walls</button>
+      <p class="hint" id="traceReport"></p>
+      <p class="hint">Works best on maps with dark walls around lit floors. Raise sensitivity
+        to catch faint walls (and more noise), lower it to keep only strong ones. Then fix up
+        by hand with the <b>Partition</b> tool and cut doorways with <b>Door</b>.</p>
+    </section>
+
+    <section class="group" data-group="export">
+      <h2>Export <span class="chev" title="Close this panel">✕</span></h2>
+      <label class="field"><span>Map name</span><input type="text" id="mapName" value="Untitled Map"></label>
+      <label class="field">
+        <span>Export resolution</span>
+        <select id="exportPpg">
+          <option value="35">35 px / square</option>
+          <option value="50">50 px / square</option>
+          <option value="70" selected>70 px / square</option>
+          <option value="100">100 px / square</option>
+          <option value="140">140 px / square</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Image format</span>
+        <select id="expFormat">
+          <option value="png" selected>PNG — lossless</option>
+          <option value="jpg">JPEG — much smaller</option>
+          <option value="webp">WebP — small, Foundry-friendly</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="expGrid"> Burn grid into the image</label>
+      <label class="check"><input type="checkbox" id="expBorder" checked> Wall off the map border</label>
+      <label class="check"><input type="checkbox" id="expPropWalls" checked> Pillars &amp; trees block sight</label>
+      <div class="stack" style="margin-top:10px">
+        <button id="expPng" class="primary wide">Download image</button>
+        <button id="expUvtt" class="wide">Universal VTT (.dd2vtt)</button>
+        <button id="expFoundry" class="wide">Foundry scene (.json)</button>
+        <div class="row">
+          <button id="expProject" class="sm">Save project</button>
+          <button id="impProject" class="sm">Open project</button>
+        </div>
+        <input type="file" id="projectFile" accept=".json,application/json" style="display:none">
+      </div>
+      <p class="hint" id="expInfo"></p>
+    </section>
+
+    <section class="group" data-group="help">
+      <h2>Shortcuts &amp; VTT notes <span class="chev" title="Close this panel">✕</span></h2>
+      <p class="hint" style="margin-top:0">
+        <kbd>G</kbd> forge &nbsp; <kbd>B</kbd> paint &nbsp; <kbd>P</kbd> prop &nbsp; <kbd>D</kbd> door &nbsp;
+        <kbd>L</kbd> light &nbsp; <kbd>W</kbd> wall &nbsp; <kbd>E</kbd> erase &nbsp; <kbd>V</kbd>/<kbd>S</kbd> select &nbsp;
+        <kbd>H</kbd> pan<br>
+        <kbd>[</kbd> <kbd>]</kbd> brush size &nbsp; <kbd>⌘Z</kbd> undo &nbsp; <kbd>⇧⌘Z</kbd> redo &nbsp;
+        <kbd>F</kbd> fit &nbsp; <kbd>0</kbd> 100%<br>
+        Right-click or <kbd>alt</kbd>-click deletes the prop, door or light under the cursor.
+        Middle-drag or space-drag pans.
+      </p>
+      <p class="hint">
+        <b>With the Select tool</b>, click a prop to pick it up, then drag to move it.
+        <kbd>shift</kbd>-drag turns it, <kbd>alt</kbd>-drag resizes it, and the sliders
+        re-shape it live.<br>
+        <kbd>Q</kbd> <kbd>E</kbd> turn &nbsp; <kbd>+</kbd> <kbd>−</kbd> resize &nbsp;
+        <kbd>⌫</kbd> delete &nbsp; <kbd>esc</kbd> deselect
+      </p>
+      <div class="divider"></div>
+      <p class="hint" style="margin-top:0">
+        <b>Roll20 / Owlbear / Alchemy:</b> upload the PNG. Set the scene to
+        <span id="helpDims">30 × 22</span> squares.<br>
+        <b>Foundry:</b> drop the PNG in your world's <code>Data</code> folder, then import the
+        scene JSON — walls, doors and lights come with it. Or use the Universal VTT file with the
+        <i>Universal Battlemap Importer</i> module.<br>
+        <b>Fantasy Grounds Unity:</b> import the <code>.dd2vtt</code> directly (Import &gt; Universal VTT).<br>
+        <b>Arkenforge / Dungeon Alchemist users:</b> the <code>.dd2vtt</code> is the same format.
+      </p>
+    </section>
+  </aside>
+
+  <!-- ============ STAGE ============ -->
+  <main id="stage">
+    <canvas id="view"></canvas>
+
+    <div id="topbar">
+      <button id="undoBtn" class="sm" title="Undo (⌘Z)">↶</button>
+      <button id="redoBtn" class="sm" title="Redo (⇧⌘Z)">↷</button>
+      <div class="sep"></div>
+      <button id="zoomOut" class="sm" title="Zoom out">−</button>
+      <div class="zoomval" id="zoomVal">100%</div>
+      <button id="zoomIn" class="sm" title="Zoom in">+</button>
+      <button id="fitBtn" class="sm" title="Fit to screen (F)">Fit</button>
+      <div class="sep"></div>
+      <button id="quickGen" class="sm primary" title="Forge a new map (G)">Forge</button>
+    </div>
+
+    <div id="floatBar" class="floatbar"></div>
+    <div id="statusbar">ready</div>
+    <div id="busy">forging…</div>
+    <div class="toast" id="toast"></div>
+  </main>
+
+  <!-- ============ RIGHT PANEL ============ -->
+  <aside class="panel right" id="rightPanel">
+    <section class="group" data-group="tools">
+      <h2>Tool options <span class="chev" title="Close this panel">✕</span></h2>
+      <label class="field"><span>Brush size <b id="brushLbl">1</b></span>
+        <input type="range" id="brushSize" min="1" max="12" step="1" value="1"></label>
+      <label class="check"><input type="checkbox" id="brushRound"> Round brush</label>
+      <div class="divider"></div>
+      <label class="check"><input type="checkbox" id="roomAutoWall" checked> Room tool builds walls</label>
+      <button id="autoWall" class="wide sm">Wall the whole floor plan</button>
+      <button id="clearEdges" class="wide sm" style="margin-top:6px">Remove all partitions</button>
+      <p class="hint">Partitions sit on the lines <i>between</i> squares, so a wall never
+        eats a 5&nbsp;ft square. With the <b>Door</b> tool, click a partition to cut a
+        doorway — click again for a secret door.</p>
+    </section>
+
+    <section class="group" data-group="prefabs">
+      <h2>Prefab rooms <span class="chev" title="Close this panel">✕</span></h2>
+      <input type="search" id="roomSearch" class="pickersearch" placeholder="Search rooms…" autocomplete="off">
+      <div class="tabs" id="roomTabs"></div>
+      <div class="roomgrid" id="roomGrid"></div>
+      <div class="divider"></div>
+      <div class="row">
+        <button id="roomRotate" class="sm" title="Turn the room 90° (R)">↻ Turn</button>
+        <button id="roomFlip" class="sm" title="Mirror the room (X)">⇄ Flip</button>
+      </div>
+      <p class="hint" id="roomOrient" style="margin:6px 0 0"></p>
+      <label class="check" style="margin-top:8px"><input type="checkbox" id="roomConnect" checked>
+        Cut doorways into neighbours</label>
+      <p class="hint" id="roomHint">Pick a room, then click the map to stamp it. Rooms placed
+        side by side share the wall between them.</p>
+
+      <div class="divider"></div>
+      <h3 class="subhead">Make your own</h3>
+      <button id="captureRoomBtn" class="wide sm">Capture a region as a room…</button>
+      <p class="hint" id="captureHint">Drag a rectangle on the map. Its terrain, partitions
+        and furniture become a reusable prefab.</p>
+      <div class="row" style="margin-top:6px">
+        <button id="roomsExport" class="sm">Export rooms</button>
+        <button id="roomsImport" class="sm">Import rooms</button>
+      </div>
+      <input type="file" id="roomPackFile" accept=".json" style="display:none">
+
+      <div id="roomSelBox" class="roomsel">
+        <div class="tformhead"><span id="roomSelName">Room</span></div>
+        <div class="row">
+          <button id="selTurn" class="sm" title="Turn 90° (R)">↻ Turn</button>
+          <button id="selFlip" class="sm" title="Mirror (X)">⇄ Flip</button>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <button id="selDupe" class="sm" title="Duplicate (D)">⧉ Copy</button>
+          <button id="selDelete" class="sm danger" title="Delete (⌫)">🗑 Delete</button>
+        </div>
+        <p class="hint" style="margin:7px 0 0">Drag the room on the map to move it. Lifting a
+          room restores whatever it was covering.</p>
+      </div>
+    </section>
+
+    <section class="group" data-group="terrain">
+      <h2>Terrain <span class="chev" title="Close this panel">✕</span></h2>
+      <div class="swatches" id="swatches"></div>
+    </section>
+
+    <section class="group" data-group="props">
+      <h2>Props <span class="chev" title="Close this panel">✕</span></h2>
+      <input type="search" id="propSearch" class="pickersearch" placeholder="Search props…" autocomplete="off">
+      <div class="tabs" id="propTabs"></div>
+      <div class="propgrid" id="propGrid"></div>
+
+      <div class="divider"></div>
+
+      <div class="transform" id="transformBox">
+        <div class="tformhead">
+          <span id="tformTitle">Placement transform</span>
+          <button id="tformReset" class="sm" title="Reset to defaults">Reset</button>
+        </div>
+        <canvas id="propPreview" width="150" height="150"></canvas>
+
+        <label class="field"><span>Direction <b><span id="propRotLbl">0</span>°</b></span>
+          <input type="range" id="propRot" min="0" max="359" step="1" value="0"></label>
+        <div class="row" style="margin:-4px 0 9px">
+          <button class="sm" id="rotLeft" title="Rotate 15° left">↺ 15°</button>
+          <button class="sm" id="rotRight" title="Rotate 15° right">↻ 15°</button>
+        </div>
+        <label class="field"><span>Snap direction to</span>
+          <select id="propSnap">
+            <option value="0">Free — any angle</option>
+            <option value="90" selected>90° — square to the grid</option>
+            <option value="45">45°</option>
+            <option value="15">15°</option>
+          </select>
+        </label>
+
+        <label class="field"><span>Scale <b><span id="propScaleLbl">1.00</span>×</b></span>
+          <input type="range" id="propScale" min="0.25" max="4" step="0.05" value="1"></label>
+        <div class="row">
+          <label class="field"><span>Width <b><span id="propWidthLbl">1.00</span>×</b></span>
+            <input type="range" id="propWidth" min="0.25" max="4" step="0.05" value="1"></label>
+          <label class="field"><span>Height <b><span id="propHeightLbl">1.00</span>×</b></span>
+            <input type="range" id="propHeight" min="0.25" max="4" step="0.05" value="1"></label>
+        </div>
+
+        <div id="propLightBox" style="display:none">
+          <div class="divider"></div>
+          <h4 class="subhead" style="margin-bottom:6px">This light</h4>
+          <div class="row">
+            <label class="field"><span>Colour</span><input type="color" id="propLightColor" value="#ff9d4c"></label>
+            <label class="field"><span>Reach <b id="propLightRangeLbl">4</b></span>
+              <input type="range" id="propLightRange" min="1" max="16" step="0.5" value="4"></label>
+          </div>
+          <label class="field"><span>Strength <b id="propLightIntLbl">0.9</b></span>
+            <input type="range" id="propLightInt" min="0.1" max="1" step="0.05" value="0.9"></label>
+          <div class="row">
+            <button class="sm" data-lightpreset="#ff9d4c">Fire</button>
+            <button class="sm" data-lightpreset="#7fd8ff">Arcane</button>
+            <button class="sm" data-lightpreset="#8fffb0">Fey</button>
+          </div>
+          <div class="row" style="margin-top:5px">
+            <button class="sm" data-lightpreset="#c98bff">Necrotic</button>
+            <button class="sm" data-lightpreset="#ffe9c0">Daylight</button>
+            <button class="sm" id="propLightReset">Reset</button>
+          </div>
+        </div>
+
+        <label class="check"><input type="checkbox" id="propRandomRot" checked> Vary angle &amp; size when placing</label>
+        <button id="openPropEditor" class="wide sm" style="margin-top:8px">✎ Design your own prop…</button>
+        <p class="hint" id="tformHint" style="margin-top:2px">
+          Applies to props you place next. Switch to the <b>Select</b> tool and click a prop
+          to re-shape one already on the map.
+        </p>
+      </div>
+    </section>
+
+    <section class="group" data-group="stats">
+      <h2>Map info <span class="chev" title="Close this panel">✕</span></h2>
+      <p class="hint" id="statsBox" style="margin-top:0"></p>
+      <button id="clearProps" class="wide sm">Clear all props</button>
+      <button id="relight" class="wide sm" style="margin-top:6px">Rebuild lights from props</button>
+    </section>
+  </aside>
+
+  <nav class="rail right" id="railRight">
+    <div class="railtools" id="toolGrid">
+      <button data-tool="select" class="active" title="Select — click a prop or room (V)">⬈</button>
+      <button data-tool="brush" title="Paint terrain (B)">🖌</button>
+      <button data-tool="rect" title="Rectangle of terrain (R)">▭</button>
+      <button data-tool="room" title="Room — floor + walls (O)">▦</button>
+      <button data-tool="edge" title="Partition — wall segments (K)">┃</button>
+      <button data-tool="door" title="Door (D)">🚪</button>
+      <button data-tool="stamp" title="Prefab room (M)">🏠</button>
+      <button data-tool="prop" title="Place prop (P)">🪑</button>
+      <button data-tool="light" title="Light source (L)">🔥</button>
+      <button data-tool="wall" title="Solid rock (W)">🧱</button>
+      <button data-tool="erase" title="Erase objects (E)">🧽</button>
+      <button data-tool="pick" title="Sample terrain (I)">💧</button>
+      <button data-tool="pan" title="Pan (H)">✋</button>
+    </div>
+    <div class="raildiv"></div>
+    <button data-side="right" data-panel="tools" title="Tool options">⚙</button>
+    <button data-side="right" data-panel="terrain" title="Terrain palette">▦</button>
+    <button data-side="right" data-panel="props" title="Props">🪑</button>
+    <button data-side="right" data-panel="prefabs" title="Prefab rooms">🏠</button>
+    <button data-side="right" data-panel="stats" title="Map info">ℹ</button>
+  </nav>
+
+  <!-- ============ PROP EDITOR ============ -->
+  <div id="propEditor">
+    <div class="pehead">
+      <strong>Prop Designer</strong>
+      <span class="pehint">Draw in grid squares — the gold box is the prop's footprint</span>
+      <span style="flex:1"></span>
+      <button id="peUndoBtn" class="sm" title="Undo (⌘Z)">↶</button>
+      <button id="peRedoBtn" class="sm" title="Redo (⇧⌘Z)">↷</button>
+      <button id="peFitBtn" class="sm" title="Fit (F)">Fit</button>
+      <button id="peSave" class="sm primary">Save prop</button>
+      <button id="peClose" class="sm">Close</button>
+    </div>
+
+    <div class="pebody">
+      <div class="pecol left">
+        <div class="petools" id="peTools">
+          <button data-petool="select" class="active" title="Select (V)"><span>⬈</span>Select</button>
+          <button data-petool="node" title="Direct select — edit points (A)"><span>⌁</span>Points</button>
+          <button data-petool="pen" title="Pen (P)"><span>✒</span>Pen</button>
+          <button data-petool="rect" title="Rectangle (M)"><span>▭</span>Rect</button>
+          <button data-petool="ellipse" title="Ellipse (L)"><span>◯</span>Ellipse</button>
+          <button data-petool="poly" title="Polygon (N)"><span>⬠</span>Polygon</button>
+          <button data-petool="star" title="Star (S)"><span>★</span>Star</button>
+          <button data-petool="line" title="Line (\)"><span>╱</span>Line</button>
+          <button data-petool="hand" title="Pan (H)"><span>✋</span>Pan</button>
+        </div>
+
+        <div class="pesection">
+          <h4>Shape options</h4>
+          <label class="field"><span>Polygon / star points <b id="pePolyPointsLbl">5</b></span>
+            <input type="range" id="pePolyPoints" min="3" max="24" step="1" value="5"></label>
+          <label class="field"><span>Star inner radius</span>
+            <input type="range" id="peStarInner" min="0.15" max="0.95" step="0.05" value="0.45"></label>
+          <button id="peAddNode" class="wide sm">Add point to path</button>
+        </div>
+
+        <div class="pesection">
+          <h4>Arrange</h4>
+          <div class="pegrid4">
+            <button data-arrange="front" class="sm" title="Bring to front">⤒</button>
+            <button data-arrange="forward" class="sm" title="Forward (])">↑</button>
+            <button data-arrange="backward" class="sm" title="Backward ([)">↓</button>
+            <button data-arrange="back" class="sm" title="Send to back">⤓</button>
+          </div>
+          <h4 style="margin-top:10px">Align</h4>
+          <div class="pegrid3">
+            <button data-align="left" class="sm">⇤</button>
+            <button data-align="hcenter" class="sm">↔</button>
+            <button data-align="right" class="sm">⇥</button>
+            <button data-align="top" class="sm">⇡</button>
+            <button data-align="vcenter" class="sm">↕</button>
+            <button data-align="bottom" class="sm">⇣</button>
+          </div>
+          <p class="hint" style="margin:6px 0 0">With one shape selected, aligns to the footprint.</p>
+          <h4 style="margin-top:10px">Transform</h4>
+          <div class="pegrid4">
+            <button data-flip="h" class="sm" title="Flip horizontal">⇄</button>
+            <button data-flip="v" class="sm" title="Flip vertical">⇅</button>
+            <button data-rot="-15" class="sm" title="Rotate -15°">↺</button>
+            <button data-rot="15" class="sm" title="Rotate 15°">↻</button>
+          </div>
+          <div class="row" style="margin-top:6px">
+            <button id="peDup" class="sm">Duplicate</button>
+            <button id="peDel" class="sm danger">Delete</button>
+          </div>
+          <div class="row" style="margin-top:6px">
+            <button id="peCompoundBtn" class="sm" title="Combine into one path so overlaps cut holes">Punch holes</button>
+            <button id="peReleaseBtn" class="sm">Release</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="pestage">
+        <canvas id="peCanvas"></canvas>
+        <div class="pestatus"><span id="peCoord">0.00, 0.00</span> · <span id="peCount">0 shapes</span></div>
+        <div class="petoast" id="peToast"></div>
+      </div>
+
+      <div class="pecol right">
+        <div class="pesection">
+          <h4>Appearance</h4>
+          <label class="check"><input type="checkbox" id="peFillOn" checked> Fill</label>
+          <label class="field"><span>Fill type</span>
+            <select id="peFillKind">
+              <option value="solid">Solid</option>
+              <option value="linear">Linear gradient</option>
+              <option value="radial">Radial gradient</option>
+            </select></label>
+          <div class="row">
+            <label class="field"><span>Colour</span><input type="color" id="peFillColor" value="#8a6238"></label>
+            <label class="field"><span>To</span><input type="color" id="peFillColor2" value="#4a3117"></label>
+          </div>
+          <label class="field"><span>Gradient angle</span>
+            <input type="range" id="peGradAngle" min="0" max="360" step="5" value="90"></label>
+
+          <label class="check" style="margin-top:6px"><input type="checkbox" id="peStrokeOn" checked> Stroke</label>
+          <div class="row">
+            <label class="field"><span>Colour</span><input type="color" id="peStrokeColor" value="#2b2b33"></label>
+            <label class="field"><span>Width <b id="peStrokeWidthLbl">0.030</b></span>
+              <input type="range" id="peStrokeWidth" min="0" max="0.3" step="0.005" value="0.03"></label>
+          </div>
+          <label class="field"><span>Opacity <b id="peOpacityLbl">1.00</b></span>
+            <input type="range" id="peOpacity" min="0" max="1" step="0.05" value="1"></label>
+          <h4 style="margin-top:10px">Swatches <i class="pehint">click fill · shift-click stroke</i></h4>
+          <div class="peswatches" id="peSwatches"></div>
+        </div>
+
+        <div class="pesection">
+          <h4>Layers</h4>
+          <div class="pelayers" id="peLayers"></div>
+        </div>
+
+        <div class="pesection">
+          <h4>Prop settings</h4>
+          <label class="field"><span>Name</span><input type="text" id="peName" value="New Prop"></label>
+          <label class="field"><span>Footprint <b id="peSizeLbl">1.0</b> squares</span>
+            <input type="range" id="peSize" min="0.3" max="12" step="0.1" value="1"></label>
+          <label class="check"><input type="checkbox" id="peBlocks"> Blocks line of sight</label>
+          <label class="check"><input type="checkbox" id="peUnder"> Lies flat under other props</label>
+          <label class="check"><input type="checkbox" id="peSnap" checked> Snap rotation to quarter turns</label>
+          <label class="check"><input type="checkbox" id="peLightOn"> Emits light</label>
+          <div id="peLightRow" style="display:none">
+            <div class="row">
+              <label class="field"><span>Range <b id="peLightRangeLbl">4</b></span>
+                <input type="range" id="peLightRange" min="1" max="12" step="0.5" value="4"></label>
+              <label class="field"><span>Colour</span><input type="color" id="peLightColor" value="#ff9d4c"></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="pesection">
+          <h4>Start from</h4>
+          <div class="row">
+            <select id="peTemplate"></select>
+            <button id="peLoadTemplate" class="sm" style="flex:0 0 auto">Load</button>
+          </div>
+          <div class="row" style="margin-top:6px">
+            <button id="peNew" class="sm">New blank</button>
+            <button id="peExport" class="sm">Export pack</button>
+            <button id="peImport" class="sm">Import pack</button>
+          </div>
+          <input type="file" id="pePackFile" accept=".json" style="display:none">
+
+          <h4 style="margin-top:12px">Bring in artwork</h4>
+          <div class="row">
+            <button id="peImportSvg" class="sm">Import SVG…</button>
+            <button id="peImportImg" class="sm">Import image…</button>
+          </div>
+          <input type="file" id="peSvgFile" accept=".svg,image/svg+xml" style="display:none">
+          <input type="file" id="peImgFile" accept="image/png,image/webp,image/jpeg" style="display:none">
+          <p class="hint">SVG from Illustrator, Inkscape, Affinity or Figma comes in as
+            editable shapes. A PNG or WebP comes in as a picture — placeable and scalable,
+            but not editable here. Convert text to outlines before exporting.</p>
+          <label class="check" style="margin-top:8px"><input type="checkbox" id="peGrid" checked> Show grid</label>
+          <label class="check"><input type="checkbox" id="peSnapGrid"> Snap to ⅛ square</label>
+          <h4 style="margin-top:10px">Saved props</h4>
+          <div class="pelibrary" id="peLibrary"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/vector.js"></script>
+<script src="js/props.js"></script>
+<script src="js/props-fantasy.js"></script>
+<script src="js/rooms.js"></script>
+<script src="js/generate.js"></script>
+<script src="js/shadows.js"></script>
+<script src="js/render.js"></script>
+<script src="js/exporters.js"></script>
+<script src="js/autotrace.js"></script>
+<script src="js/svgimport.js"></script>
+<script src="js/customprops.js"></script>
+<script src="js/propeditor.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
