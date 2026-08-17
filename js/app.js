@@ -1733,6 +1733,10 @@ function showPanel(side, name) {
   const same = panelState[side] === name;
   panelState[side] = same ? null : name;
 
+  // where the canvas sits on screen right now: opening or shutting the left
+  // panel shifts that edge, and the map must not ride along with it
+  const before = view.getBoundingClientRect();
+
   panel.classList.toggle('shut', !panelState[side]);
   for (const sec of panel.querySelectorAll('section.group'))
     sec.classList.toggle('showing', sec.dataset.group === panelState[side]);
@@ -1741,7 +1745,15 @@ function showPanel(side, name) {
       b.classList.toggle('open', b.dataset.panel === panelState[side]);
 
   try { localStorage.setItem(PANEL_STATE_KEY, JSON.stringify(panelState)); } catch (e) { }
-  // the stage changed width, so the view needs re-fitting to the new centre
+
+  // the stage changed width; counter-shift the pan so the map keeps the same
+  // spot on screen instead of sliding with the canvas edge
+  const after = view.getBoundingClientRect();
+  if (state.cache) {
+    state.view.x += before.left - after.left;
+    state.view.y += before.top - after.top;
+  }
+
   requestAnimationFrame(() => { paint(); updateFloatBar(); });
 }
 
