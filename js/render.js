@@ -1044,6 +1044,47 @@ function grainTile(seed) {
   return cv;
 }
 
+/**
+ * Cells the outdoors can reach — the complement being everything sealed inside.
+ *
+ * Rooms are made of floor only, so a pool, a pit or a lava vent punches a hole
+ * in the room it sits in. Flooding inwards from the map edge finds those holes,
+ * because only a wall stops the flood. Enclosed rooms stop it too: without
+ * that, one channel of water running off the map would drag the whole dungeon
+ * outdoors with it, since the flood crosses liquid that a room never does.
+ */
+function enclosedCells(map, rooms) {
+  const W = map.w, H = map.h;
+  const indoors = new Uint8Array(W * H);
+  for (const r of rooms) if (r.enclosed) for (const c of r.cells) indoors[c] = 1;
+  const outside = new Uint8Array(W * H);
+  const stack = [];
+  const push = (x, y) => {
+    if (!map.inBounds(x, y)) return;
+    const i = y * W + x;
+    if (outside[i] || indoors[i] || isWallTile(map.cells[i])) return;
+    outside[i] = 1; stack.push(x, y);
+  };
+  // step in from off the map, and only where the boundary is open: a map
+  // sealed by edge walls has no outdoors at all
+  for (let x = 0; x < W; x++) {
+    if (map.getH(x, 0) === EDGE.NONE) push(x, 0);
+    if (map.getH(x, H) === EDGE.NONE) push(x, H - 1);
+  }
+  for (let y = 0; y < H; y++) {
+    if (map.getV(0, y) === EDGE.NONE) push(0, y);
+    if (map.getV(W, y) === EDGE.NONE) push(W - 1, y);
+  }
+  while (stack.length) {
+    const cy = stack.pop(), cx = stack.pop();
+    if (map.getV(cx + 1, cy) === EDGE.NONE) push(cx + 1, cy);
+    if (map.getV(cx, cy) === EDGE.NONE) push(cx - 1, cy);
+    if (map.getH(cx, cy + 1) === EDGE.NONE) push(cx, cy + 1);
+    if (map.getH(cx, cy) === EDGE.NONE) push(cx, cy - 1);
+  }
+  return outside;
+}
+
 /** Mask of every enclosed interior, used to split warm from cool. */
 function interiorMask(map, u, rooms) {
   const cv = makeCanvas(map.w * u, map.h * u);
@@ -1055,6 +1096,16 @@ function interiorMask(map, u, rooms) {
     roomPath(c, r, map, u);
     c.fill();
   }
+  // the water in an indoor pool is indoors too, and so is anything standing in
+  // it: without this the cool wash lands on the pool and blue-tints the props
+  const outside = enclosedCells(map, rooms);
+  c.beginPath();
+  for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) {
+    const i = y * map.w + x;
+    if (outside[i] || isWallTile(map.cells[i])) continue;
+    c.rect(x * u, y * u, u, u);
+  }
+  c.fill();
   return cv;
 }
 
