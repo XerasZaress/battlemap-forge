@@ -330,6 +330,28 @@ export resolution and recolour cleanly. The picker is grouped into tabs:
 Anything that glows carries its own light, so dropping a chandelier or a magic circle
 lights the room and exports as a real light source to your VTT.
 
+### How props sit on the floor
+
+Every prop declares **how tall it is**, in grid units — one unit being one 5 ft square.
+A dining table is 0.5, a bookshelf 1.2, a stone pillar 2.4, an oak tree 3.2. That single
+number drives three things, and between them they're what stops a prop reading as a
+sticker laid on the map:
+
+- **its cast shadow**, thrown away from the light, growing longer and softer the taller
+  the object stands
+- **its side face**, the sliver of its own side you catch on the shadow side, which is
+  what gives it thickness
+- **its contact shading**, the tight darkening right where it meets the ground
+
+Every prop on the map is lit from the same direction — up and to the left — and that
+consistency is most of what makes a roomful of furniture look like one scene rather than
+a collection of clip art. Props that lie flat, like rugs and magic circles, declare
+themselves flat and get none of the three. Props that hang, like chandeliers, throw their
+shadow far and faint and touch nothing.
+
+Shadows come from a traced silhouette of the whole prop, so a bookshelf casts one shadow
+rather than one per book. Turn the lot off with **Shadows** under Appearance.
+
 ### Designing your own props
 
 **Props → Design your own prop…** opens a vector workspace. What you draw becomes a real
@@ -354,7 +376,9 @@ compound path so overlaps cut through — a torus, a window, a ring.
 
 **Prop settings** decide how it behaves once placed: footprint in grid squares, whether it
 blocks line of sight, whether it lies flat under other props like a rug, whether rotation
-snaps to quarter turns, and whether it emits light (with range and colour).
+snaps to quarter turns, and whether it emits light (with range and colour). A prop you make
+here starts half a grid unit tall, so it picks up the same shadow, side face and contact
+shading as the built-ins.
 
 Everything is drawn in grid units, so a prop stays sharp at any export resolution — the
 same drawing serves a 35 px preview and a 140 px print.
@@ -543,6 +567,7 @@ in feet. Import it, then point the scene's background at the image you exported.
 index.html        the app — open this
 css/style.css     interface styling
 js/core.js        seeded RNG, noise, terrain materials, map model, edge walls
+js/shading.js     the light direction, prop heights, and the shadow/side/contact model
 js/props.js       the core prop library (every object is drawn in code, not an image)
 js/props-fantasy.js  grand statuary, arcane apparatus, chandeliers, rugs, vehicles
 js/rooms.js       prefab furnished rooms
@@ -550,7 +575,15 @@ js/generate.js    the map generators
 js/render.js      the renderer
 js/exporters.js   wall extraction and the VTT file formats
 js/app.js         interface, tools, undo, export wiring
+
+tools/prop-contact-sheet.html   every prop, same size, same floor, same light
 ```
+
+`js/shading.js` is the file to read before changing how props look. It holds the one light
+direction the whole library is lit by, the fallback heights per category, and the cache of
+traced prop silhouettes the shading is built from. Open `tools/prop-contact-sheet.html`
+after touching it — it draws all 124 props side by side on the same floor under the same
+light, so a wrong height or a shadow pointing the wrong way is obvious at a glance.
 
 Nothing is minified and there are no dependencies, so it's all editable. Adding a prop is
 one `defProp` call in `js/props.js`; adding a whole map type is one `defGen` call in

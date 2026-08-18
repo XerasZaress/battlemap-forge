@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<!--
+  Battlemap Forge — prop contact sheet.
+
+  Open this file directly. It draws every prop in the library once, at the same
+  size, on the same floor, under the same light, with its name and declared
+  height underneath. Any prop whose shadow points the wrong way, whose height is
+  obviously wrong for what it is, or whose silhouette has gone strange, jumps out
+  of the sheet immediately — which is much faster than hunting for it on a map.
+
+  Run it after touching js/shading.js or after adding props. It is a development
+  tool and nothing in the app depends on it.
+-->
+<meta charset="utf-8">
+<title>Prop contact sheet — Battlemap Forge</title>
+<style>
+  body { background: #14161c; color: #cfd3dc; font: 13px/1.4 system-ui, sans-serif; margin: 24px; }
+  h1 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  p.note { color: #7d8595; margin: 0 0 20px; }
+  .sheet { display: flex; flex-wrap: wrap; gap: 14px; }
+  figure { margin: 0; width: 168px; }
+  canvas { display: block; border-radius: 4px; }
+  figcaption { margin-top: 5px; font-size: 11px; color: #9aa3b2; }
+  figcaption b { color: #e4e8f0; font-weight: 500; }
+  .h { color: #c9a227; }
+  h2 { font-size: 13px; font-weight: 600; color: #c9a227; margin: 22px 0 8px;
+       text-transform: uppercase; letter-spacing: .08em; width: 100%; }
+</style>
+
+<h1>Prop contact sheet</h1>
+<p class="note">
+  Every prop at 84 px per square on the same floor, lit from the same direction.
+  The number in gold is the prop's declared height in grid units.
+</p>
+<div class="sheet" id="sheet"></div>
+
+<script src="../js/core.js"></script>
+<script src="../js/shading.js"></script>
+<script src="../js/props.js"></script>
+<script src="../js/props-fantasy.js"></script>
+<script src="../js/render.js"></script>
+<script>
+  const U = 84;              // pixels per grid square
+  const TILE = 2;            // squares shown per prop
+
+  // A plain, slightly noisy floor. Flat colour hides contact shading; this
+  // doesn't, and it is neutral enough not to flatter any one prop.
+  function floor(ctx, w, h, seed) {
+    ctx.fillStyle = '#6b5c46';
+    ctx.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 3) {
+      for (let x = 0; x < w; x += 3) {
+        const n = hash2(x, y, seed);
+        ctx.fillStyle = `rgba(0,0,0,${n * 0.09})`;
+        ctx.fillRect(x, y, 3, 3);
+      }
+    }
+    ctx.strokeStyle = 'rgba(0,0,0,0.22)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < TILE; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * U + .5, 0); ctx.lineTo(i * U + .5, h);
+      ctx.moveTo(0, i * U + .5); ctx.lineTo(w, i * U + .5);
+      ctx.stroke();
+    }
+  }
+
+  // A single placed prop, centred, scaled so anything bigger than the tile still
+  // fits — the sheet is about consistency of shading, not of absolute size.
+  function cell(def) {
+    const side = TILE * U;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = side;
+    const ctx = cv.getContext('2d');
+    floor(ctx, side, side, 11);
+
+    const fit = Math.min(1, (TILE * 0.82) / Math.max(0.6, def.size));
+    const p = { x: TILE / 2, y: TILE / 2, type: def.key, rot: 0, scale: fit };
+    const fakeMap = { get: () => 'floor_stone', w: TILE, h: TILE };
+
+    drawPropGrounding(ctx, fakeMap, U, p, def, 7);
+    ctx.save();
+    ctx.translate(p.x * U, p.y * U);
+    ctx.scale(fit, fit);
+    def.draw(ctx, U, seededFn(7));
+    ctx.restore();
+    return cv;
+  }
+
+  const sheet = document.getElementById('sheet');
+  const cats = [];
+  for (const def of PROP_LIST) if (!cats.includes(def.cat)) cats.push(def.cat);
+
+  for (const cat of cats) {
+    const head = document.createElement('h2');
+    head.textContent = cat;
+    sheet.appendChild(head);
+    for (const def of PROP_LIST.filter(d => d.cat === cat)) {
+      const fig = document.createElement('figure');
+      fig.appendChild(cell(def));
+      const cap = document.createElement('figcaption');
+      const h = propHeight(def);
+      cap.innerHTML = `<b>${def.label}</b><br>` +
+        (h > 0 ? `<span class="h">h ${h}</span>` : `<span class="h">flat</span>`) +
+        ` · size ${def.size}` + (def.floats ? ' · hangs' : '');
+      fig.appendChild(cap);
+      sheet.appendChild(fig);
+    }
+  }
+</script>

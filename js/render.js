@@ -873,47 +873,94 @@ function drawSunkProps(ctx, map, u, opts) {
 /** How much of the liquid stands between the viewer and a sunk prop. */
 const SUNK_VEIL = { [T.WATER]: 0.3, [T.DEEP]: 0.55, [T.LAVA]: 0.62 };
 
+/** The prop's own artwork, drawn as vectors — still, deliberately, rather than
+ *  blitted from the cached raster, so it stays exactly as sharp at 140 px per
+ *  square as it ever was. The raster only ever supplies shading underneath. */
+function drawPropArt(ctx, u, p, def, seed) {
+  ctx.save();
+  ctx.translate(p.x * u, p.y * u);
+  ctx.rotate(p.rot || 0);
+  const sc = p.scale || 1;
+  const wd = (p.width === undefined ? 1 : p.width) * (p.mirror ? -1 : 1);
+  const ht = p.height === undefined ? 1 : p.height;
+  ctx.scale(sc * wd, sc * ht);
+  def.draw(ctx, u, seededFn(seed));
+  ctx.restore();
+}
+
+/**
+ * Props go down in three passes rather than one prop at a time, for two
+ * reasons. Flat props have to be laid before any shading so that a barrel's
+ * shadow falls *across* the rug rather than under it. And doing all the shading
+ * together, then all the artwork, keeps the renderer from flipping canvas state
+ * hundreds of times a frame, which on a crowded map is most of the cost.
+ */
 function drawPropList(ctx, map, u, opts, props) {
-  const list = props.slice().sort((a, b) => {
-    const ua = PROPS[a.type] && PROPS[a.type].under ? 0 : 1;
-    const ub = PROPS[b.type] && PROPS[b.type].under ? 0 : 1;
-    return ua - ub || a.y - b.y;
-  });
-  for (const p of list) {
+  const flat = [], standing = [];
+  for (const p of props) {
     const def = PROPS[p.type];
     if (!def) continue;
-    // over a liquid, a plain drop shadow is lost in the moving texture, so add
-    // a contact shadow that reads as the object resting on the surface — which
-    // is exactly the wrong read for one that has sunk into it
-    const under = map.get(Math.floor(p.x), Math.floor(p.y));
-    if (opts.shadows && !def.under && !p.sunk && MATS[under] && MATS[under].liquid) {
-      const rr = def.size * (p.scale === undefined ? 1 : p.scale) * 0.46 * u;
-      const g = ctx.createRadialGradient(p.x * u, p.y * u, rr * 0.2, p.x * u, p.y * u, rr);
-      g.addColorStop(0, 'rgba(0,0,0,0.5)');
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.save();
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.ellipse(p.x * u, p.y * u + rr * 0.1, rr, rr * 0.86, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
+    const entry = { p, def, seed: Math.round(p.x * 977 + p.y * 331) };
+    // `under` is the flat set, not "anything with no height" — a map marker has
+    // no height either, and it belongs on top of the furniture, not beneath it.
+    (def.under ? flat : standing).push(entry);
+  }
+  // Nearer things last, so a prop overlaps the one behind it.
+  standing.sort((a, b) => a.p.y - b.p.y);
+
+  for (const e of flat) drawPropArt(ctx, u, e.p, e.def, e.seed);
+  if (opts.shadows) {
+    for (const e of standing) drawPropGrounding(ctx, map, u, e.p, e.def, e.seed);
+  }
+  for (const e of standing) drawPropArt(ctx, u, e.p, e.def, e.seed);
+}
+
+/**
+ * Everything that makes a prop sit on the floor rather than float above it:
+ * its cast shadow, the sliver of its own side, and the contact darkening where
+ * it meets the ground. All three come from one cached silhouette of the prop —
+ * see js/shading.js — so a bookshelf casts one shadow rather than one per book.
+ *
+ * How far each cue reaches is driven entirely by the prop's declared height, so
+ * an obelisk throws a long soft shadow and a stool throws a short crisp one
+ * without either of them having to say anything beyond how tall it is.
+ */
+function drawPropGrounding(ctx, map, u, p, def, seed) {
+  if (propHeight(def) <= 0) return;                 // rugs and circles lie flat
+
+  const beneath = map.get(Math.floor(p.x), Math.floor(p.y));
+  const onLiquid = MATS[beneath] && MATS[beneath].liquid;
+  const sprite = propSprite(def, spriteRes(def, u), seed);
+  const sh = propShadow(def);
+
+  // A cast shadow is lost in moving caustics, and a submerged prop has no
+  // business throwing one at all — in both cases the contact shading carries
+  // the weight instead, and carries it a little harder to compensate.
+  const casts = sh && sprite.shadow && !onLiquid && !p.sunk;
+  if (casts) {
     ctx.save();
-    ctx.translate(p.x * u, p.y * u);
-    ctx.rotate(p.rot || 0);
-    const sc = p.scale || 1;
-    const wd = (p.width === undefined ? 1 : p.width) * (p.mirror ? -1 : 1);
-    const ht = p.height === undefined ? 1 : p.height;
-    ctx.scale(sc * wd, sc * ht);
-    if (opts.shadows && !def.under) {
-      ctx.shadowColor = 'rgba(0,0,0,0.45)';
-      ctx.shadowBlur = u * 0.14;
-      ctx.shadowOffsetX = u * 0.05;
-      ctx.shadowOffsetY = u * 0.07;
-    }
-    const seed = Math.round(p.x * 977 + p.y * 331);
-    def.draw(ctx, u, seededFn(seed));
+    // These rasters are already blurred, so interpolating them on the way in
+    // buys nothing and costs a good deal on a map with hundreds of props.
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = sh.alpha;
+    blitPropRaster(ctx, sprite.shadow, sprite, p, u, sh.dx * u, sh.dy * u);
     ctx.restore();
+  }
+
+  if (sprite.ao) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = casts ? AO_ALPHA : AO_ALPHA * 1.45;
+    blitPropRaster(ctx, sprite.ao, sprite, p, u, 0, 0);
+    ctx.restore();
+  }
+
+  // The side face: the same artwork, darkened, peeking out on the shadow side.
+  // It has to be blitted rather than baked into the prop, because the sun must
+  // not turn when the prop does.
+  if (sprite.side && !p.sunk) {
+    const reach = propHeight(def) * SIDE_LENGTH * u;
+    blitPropRaster(ctx, sprite.side, sprite, p, u, SUN.x * reach, SUN.y * reach);
   }
 }
 
