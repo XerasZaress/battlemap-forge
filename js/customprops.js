@@ -15,6 +15,7 @@ function customPropDef(o) {
     key: 'custom_' + Math.random().toString(36).slice(2, 9),
     label: 'New Prop',
     size: 1,
+    h: 0.5,               // height in grid units — drives shading, see js/shading.js
     blocks: false,
     under: false,
     snap: true,
@@ -54,6 +55,7 @@ function registerCustomProp(def) {
   const draw = def.image ? makeImageDrawFn(def) : makeShapeDrawFn(def.shapes);
   const entry = {
     key: def.key, label: def.label, cat: 'custom', size: def.size,
+    h: def.h === undefined ? 0.5 : def.h,
     blocks: !!def.blocks, under: !!def.under, snap: !!def.snap,
     rand: true, custom: true, draw
   };
@@ -61,6 +63,9 @@ function registerCustomProp(def) {
 
   const existing = PROPS[def.key];
   PROPS[def.key] = entry;
+  // the shading pass caches a rasterised silhouette per prop, and this one has
+  // just changed shape under it
+  clearPropSprites();
   const i = PROP_LIST.findIndex(p => p.key === def.key);
   if (i >= 0) PROP_LIST[i] = entry; else PROP_LIST.push(entry);
   if (PROP_CATEGORIES.indexOf('custom') === -1) PROP_CATEGORIES.push('custom');

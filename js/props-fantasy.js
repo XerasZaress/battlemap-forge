@@ -58,6 +58,10 @@ function ringsOfCandles(ctx, u, r, n, rot) {
 
 /** Soft radial bloom, for anything that glows. */
 function glow(ctx, r, col, alpha) {
+  // A glow is light, not substance, so it stays out of the silhouette the
+  // shading pass traces — otherwise every lamp on the map would cast a shadow
+  // the shape of its own halo.
+  if (SILHOUETTE_PASS) return;
   const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
   g.addColorStop(0, rgba(hexToRgb(col), alpha));
   g.addColorStop(1, rgba(hexToRgb(col), 0));
@@ -73,7 +77,7 @@ function pedestal(ctx, u, r) {
 
 /* ================= GRAND — statuary and architecture ================= */
 
-defProp('statue_angel', 'Angel Statue', 'grand', { size: 1.5, blocks: true, snap: true }, (ctx, u) => {
+defProp('statue_angel', 'Angel Statue', 'grand', { size: 1.5, h: 2.3, blocks: true, snap: true }, (ctx, u) => {
   pedestal(ctx, u, u * 0.62);
   // wings sweeping back
   for (const s of [-1, 1]) {
@@ -98,7 +102,7 @@ defProp('statue_angel', 'Angel Statue', 'grand', { size: 1.5, blocks: true, snap
   circ(ctx, 0, -u * 0.13, u * 0.12); shp(ctx, null, GOLD_L, u * 0.018);
 });
 
-defProp('statue_dragon', 'Dragon Statue', 'grand', { size: 2, blocks: true, snap: true }, (ctx, u, rnd) => {
+defProp('statue_dragon', 'Dragon Statue', 'grand', { size: 2, h: 2, blocks: true, snap: true }, (ctx, u, rnd) => {
   circ(ctx, 0, 0, u * 0.85); shp(ctx, MARBLE_D, 'rgba(0,0,0,0.5)', u * 0.045);
   circ(ctx, 0, 0, u * 0.72); shp(ctx, MARBLE, null);
   // coiled body
@@ -121,7 +125,7 @@ defProp('statue_dragon', 'Dragon Statue', 'grand', { size: 2, blocks: true, snap
   ctx.stroke();
 });
 
-defProp('statue_warrior', 'Warrior Statue', 'grand', { size: 1.3, blocks: true, snap: true }, (ctx, u) => {
+defProp('statue_warrior', 'Warrior Statue', 'grand', { size: 1.3, h: 1.9, blocks: true, snap: true }, (ctx, u) => {
   pedestal(ctx, u, u * 0.55);
   poly(ctx, [[-u * 0.13, u * 0.24], [-u * 0.1, -u * 0.05], [u * 0.1, -u * 0.05], [u * 0.13, u * 0.24]]);
   shp(ctx, MARBLE, 'rgba(0,0,0,0.35)', u * 0.022);
@@ -133,7 +137,7 @@ defProp('statue_warrior', 'Warrior Statue', 'grand', { size: 1.3, blocks: true, 
   circ(ctx, -u * 0.19, u * 0.05, u * 0.12); shp(ctx, '#6a6f7a', GOLD_D, u * 0.02);
 });
 
-defProp('statue_bust', 'Bust on Plinth', 'grand', { size: 0.9, snap: true }, (ctx, u) => {
+defProp('statue_bust', 'Bust on Plinth', 'grand', { size: 0.9, h: 1.3, snap: true }, (ctx, u) => {
   rectPath(ctx, -u * 0.3, -u * 0.3, u * 0.6, u * 0.6, u * 0.04);
   shp(ctx, MARBLE_D, 'rgba(0,0,0,0.5)', u * 0.035);
   rectPath(ctx, -u * 0.24, -u * 0.24, u * 0.48, u * 0.48, u * 0.03);
@@ -142,7 +146,7 @@ defProp('statue_bust', 'Bust on Plinth', 'grand', { size: 0.9, snap: true }, (ct
   circ(ctx, -u * 0.04, -u * 0.04, u * 0.05); shp(ctx, 'rgba(255,255,255,0.2)', null);
 });
 
-defProp('gargoyle', 'Gargoyle', 'grand', { size: 1, blocks: true, snap: true }, (ctx, u) => {
+defProp('gargoyle', 'Gargoyle', 'grand', { size: 1, h: 1.2, blocks: true, snap: true }, (ctx, u) => {
   circ(ctx, 0, 0, u * 0.36); shp(ctx, '#54504a', 'rgba(0,0,0,0.5)', u * 0.035);
   for (const s of [-1, 1]) {
     poly(ctx, [[s * u * 0.05, -u * 0.05], [s * u * 0.4, -u * 0.3], [s * u * 0.3, u * 0.05]]);
@@ -153,7 +157,7 @@ defProp('gargoyle', 'Gargoyle', 'grand', { size: 1, blocks: true, snap: true }, 
   circ(ctx, u * 0.05, 0, u * 0.028); shp(ctx, '#d05a3a', null);
 });
 
-defProp('obelisk', 'Obelisk', 'grand', { size: 1.2, blocks: true, snap: true }, (ctx, u) => {
+defProp('obelisk', 'Obelisk', 'grand', { size: 1.2, h: 3, blocks: true, snap: true }, (ctx, u) => {
   rectPath(ctx, -u * 0.34, -u * 0.34, u * 0.68, u * 0.68, u * 0.03);
   shp(ctx, MARBLE_D, 'rgba(0,0,0,0.55)', u * 0.04);
   poly(ctx, [[-u * 0.2, -u * 0.2], [u * 0.2, -u * 0.2], [u * 0.13, u * 0.2], [-u * 0.13, u * 0.2]]);
@@ -169,7 +173,7 @@ defProp('obelisk', 'Obelisk', 'grand', { size: 1.2, blocks: true, snap: true }, 
   ctx.stroke();
 });
 
-defProp('column_ornate', 'Fluted Column', 'grand', { size: 1.15, blocks: true, snap: true }, (ctx, u) => {
+defProp('column_ornate', 'Fluted Column', 'grand', { size: 1.15, h: 2.7, blocks: true, snap: true }, (ctx, u) => {
   rectPath(ctx, -u * 0.44, -u * 0.44, u * 0.88, u * 0.88, u * 0.04);
   shp(ctx, MARBLE_D, 'rgba(0,0,0,0.55)', u * 0.04);
   circ(ctx, 0, 0, u * 0.34); shp(ctx, MARBLE, 'rgba(0,0,0,0.35)', u * 0.025);
@@ -184,7 +188,7 @@ defProp('column_ornate', 'Fluted Column', 'grand', { size: 1.15, blocks: true, s
   circ(ctx, 0, 0, u * 0.13); shp(ctx, MARBLE_L, 'rgba(0,0,0,0.25)', u * 0.018);
 });
 
-defProp('fountain_grand', 'Grand Fountain', 'grand', { size: 2.8, blocks: true, snap: true }, (ctx, u) => {
+defProp('fountain_grand', 'Grand Fountain', 'grand', { size: 2.8, h: 1, blocks: true, snap: true }, (ctx, u) => {
   circ(ctx, 0, 0, u * 1.3); shp(ctx, MARBLE_D, 'rgba(0,0,0,0.5)', u * 0.06);
   circ(ctx, 0, 0, u * 1.14); shp(ctx, '#2f6f8a', 'rgba(0,0,0,0.3)', u * 0.03);
   circ(ctx, 0, 0, u * 0.62); shp(ctx, MARBLE, 'rgba(0,0,0,0.35)', u * 0.035);
@@ -199,7 +203,7 @@ defProp('fountain_grand', 'Grand Fountain', 'grand', { size: 2.8, blocks: true, 
   circ(ctx, -u * 0.4, -u * 0.4, u * 0.26); shp(ctx, 'rgba(255,255,255,0.12)', null);
 });
 
-defProp('throne_grand', 'Grand Throne', 'grand', { size: 1.7, snap: true }, (ctx, u) => {
+defProp('throne_grand', 'Grand Throne', 'grand', { size: 1.7, h: 1.3, snap: true }, (ctx, u) => {
   const w = u * 0.95, h = u * 1.05;
   poly(ctx, [[-w / 2, -h * 0.62], [w / 2, -h * 0.62], [w / 2 * 0.86, h / 2], [-w / 2 * 0.86, h / 2]]);
   shp(ctx, '#5e594f', 'rgba(0,0,0,0.6)', u * 0.045);
@@ -247,7 +251,7 @@ defProp('dais', 'Raised Dais', 'grand', { size: 3.4, under: true, snap: true }, 
   shp(ctx, null, rgba(hexToRgb(GOLD), 0.6), u * 0.025);
 });
 
-defProp('altar_grand', 'High Altar', 'grand', { size: 2.2, snap: true }, (ctx, u) => {
+defProp('altar_grand', 'High Altar', 'grand', { size: 2.2, h: 0.95, snap: true }, (ctx, u) => {
   const w = u * 1.9, h = u * 1.0;
   rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.05);
   shp(ctx, MARBLE_D, 'rgba(0,0,0,0.6)', u * 0.05);
@@ -263,7 +267,7 @@ defProp('altar_grand', 'High Altar', 'grand', { size: 2.2, snap: true }, (ctx, u
   }
 });
 
-defProp('menhir', 'Standing Stone', 'grand', { size: 1.1, blocks: true }, (ctx, u, rnd) => {
+defProp('menhir', 'Standing Stone', 'grand', { size: 1.1, h: 2.1, blocks: true }, (ctx, u, rnd) => {
   blob(ctx, u * 0.36, 8, 0.32, rnd);
   shp(ctx, '#6a6459', 'rgba(0,0,0,0.55)', u * 0.045);
   blob(ctx, u * 0.2, 7, 0.35, seededFn(9));
@@ -274,7 +278,7 @@ defProp('menhir', 'Standing Stone', 'grand', { size: 1.1, blocks: true }, (ctx, 
   ctx.stroke();
 });
 
-defProp('great_bell', 'Great Bell', 'grand', { size: 1.4, blocks: true, snap: true }, (ctx, u) => {
+defProp('great_bell', 'Great Bell', 'grand', { size: 1.4, h: 1.5, blocks: true, snap: true }, (ctx, u) => {
   circ(ctx, 0, 0, u * 0.56); shp(ctx, BRASS_D, 'rgba(0,0,0,0.55)', u * 0.045);
   circ(ctx, 0, 0, u * 0.46); shp(ctx, BRASS, 'rgba(0,0,0,0.25)', u * 0.02);
   circ(ctx, 0, 0, u * 0.3); shp(ctx, BRASS_L, 'rgba(0,0,0,0.2)', u * 0.018);
@@ -334,7 +338,7 @@ defProp('scrying_pool', 'Scrying Pool', 'arcane',
   });
 
 defProp('portal_arch', 'Portal Arch', 'arcane',
-  { size: 2, blocks: true, snap: true, light: { range: 4, color: '#a06fe8', intensity: 0.7 } }, (ctx, u) => {
+  { size: 2, h: 2.4, blocks: true, snap: true, light: { range: 4, color: '#a06fe8', intensity: 0.7 } }, (ctx, u) => {
     const w = u * 1.5, h = u * 0.5;
     rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.06);
     shp(ctx, MARBLE_D, 'rgba(0,0,0,0.6)', u * 0.05);
@@ -351,7 +355,7 @@ defProp('portal_arch', 'Portal Arch', 'arcane',
   });
 
 defProp('crystal_ball', 'Crystal Ball', 'arcane',
-  { size: 0.8, light: { range: 2.5, color: '#7fd8ff', intensity: 0.5 } }, (ctx, u) => {
+  { size: 0.8, h: 0.35, light: { range: 2.5, color: '#7fd8ff', intensity: 0.5 } }, (ctx, u) => {
     circ(ctx, 0, 0, u * 0.26); shp(ctx, BRASS_D, 'rgba(0,0,0,0.5)', u * 0.03);
     for (let i = 0; i < 3; i++) {
       const a = (i / 3) * Math.PI * 2;
@@ -363,7 +367,7 @@ defProp('crystal_ball', 'Crystal Ball', 'arcane',
     circ(ctx, -u * 0.06, -u * 0.06, u * 0.06); shp(ctx, 'rgba(255,255,255,0.55)', null);
   });
 
-defProp('orrery', 'Orrery', 'arcane', { size: 1.7, snap: true }, (ctx, u) => {
+defProp('orrery', 'Orrery', 'arcane', { size: 1.7, h: 0.9, snap: true }, (ctx, u) => {
   circ(ctx, 0, 0, u * 0.68); shp(ctx, WOOD_D, 'rgba(0,0,0,0.5)', u * 0.04);
   circ(ctx, 0, 0, u * 0.6); shp(ctx, WOOD_M, null);
   ctx.strokeStyle = BRASS; ctx.lineWidth = u * 0.03;
@@ -380,7 +384,7 @@ defProp('orrery', 'Orrery', 'arcane', { size: 1.7, snap: true }, (ctx, u) => {
   }
 });
 
-defProp('lectern', 'Lectern', 'arcane', { size: 0.9, snap: true }, (ctx, u) => {
+defProp('lectern', 'Lectern', 'arcane', { size: 0.9, h: 0.9, snap: true }, (ctx, u) => {
   poly(ctx, [[-u * 0.26, -u * 0.16], [u * 0.26, -u * 0.16], [u * 0.3, u * 0.2], [-u * 0.3, u * 0.2]]);
   shp(ctx, WOOD_D, 'rgba(0,0,0,0.5)', u * 0.035);
   rectPath(ctx, -u * 0.22, -u * 0.12, u * 0.44, u * 0.26, u * 0.02);
@@ -397,7 +401,7 @@ defProp('lectern', 'Lectern', 'arcane', { size: 0.9, snap: true }, (ctx, u) => {
   ctx.stroke();
 });
 
-defProp('alchemy_bench', 'Alchemy Bench', 'arcane', { size: 2.2, snap: true }, (ctx, u) => {
+defProp('alchemy_bench', 'Alchemy Bench', 'arcane', { size: 2.2, h: 0.7, snap: true }, (ctx, u) => {
   const w = u * 2.0, h = u * 0.85;
   rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.05);
   shp(ctx, WOOD_D, OUTLINE, u * 0.04);
@@ -415,7 +419,7 @@ defProp('alchemy_bench', 'Alchemy Bench', 'arcane', { size: 2.2, snap: true }, (
 });
 
 defProp('rune_stone', 'Rune Stone', 'arcane',
-  { size: 0.9, blocks: true, light: { range: 2, color: '#7fd8ff', intensity: 0.4 } }, (ctx, u, rnd) => {
+  { size: 0.9, h: 0.7, blocks: true, light: { range: 2, color: '#7fd8ff', intensity: 0.4 } }, (ctx, u, rnd) => {
     blob(ctx, u * 0.3, 8, 0.3, rnd);
     shp(ctx, '#5b564d', 'rgba(0,0,0,0.55)', u * 0.04);
     ctx.strokeStyle = rgba(hexToRgb(ARCANE), 0.85); ctx.lineWidth = u * 0.03;
@@ -426,7 +430,7 @@ defProp('rune_stone', 'Rune Stone', 'arcane',
   });
 
 defProp('arcane_pylon', 'Arcane Pylon', 'arcane',
-  { size: 1.1, blocks: true, snap: true, light: { range: 4.5, color: '#a06fe8', intensity: 0.8 } }, (ctx, u) => {
+  { size: 1.1, h: 1.8, blocks: true, snap: true, light: { range: 4.5, color: '#a06fe8', intensity: 0.8 } }, (ctx, u) => {
     rectPath(ctx, -u * 0.32, -u * 0.32, u * 0.64, u * 0.64, u * 0.05);
     shp(ctx, MARBLE_D, 'rgba(0,0,0,0.55)', u * 0.04);
     circ(ctx, 0, 0, u * 0.22); shp(ctx, MARBLE, 'rgba(0,0,0,0.3)', u * 0.02);
@@ -435,7 +439,7 @@ defProp('arcane_pylon', 'Arcane Pylon', 'arcane',
     shp(ctx, 'rgba(190,150,240,0.95)', 'rgba(240,225,255,0.8)', u * 0.02);
   });
 
-defProp('mirror_tall', 'Standing Mirror', 'arcane', { size: 0.9, snap: true }, (ctx, u) => {
+defProp('mirror_tall', 'Standing Mirror', 'arcane', { size: 0.9, h: 1.5, snap: true }, (ctx, u) => {
   ctx.beginPath(); ctx.ellipse(0, 0, u * 0.22, u * 0.34, 0, 0, Math.PI * 2);
   shp(ctx, GOLD_D, 'rgba(0,0,0,0.5)', u * 0.035);
   ctx.beginPath(); ctx.ellipse(0, 0, u * 0.17, u * 0.29, 0, 0, Math.PI * 2);
@@ -445,7 +449,7 @@ defProp('mirror_tall', 'Standing Mirror', 'arcane', { size: 0.9, snap: true }, (
 });
 
 defProp('spell_tome', 'Open Tome', 'arcane',
-  { size: 0.7, light: { range: 1.6, color: '#7fd8ff', intensity: 0.3 } }, (ctx, u) => {
+  { size: 0.7, h: 0.15, light: { range: 1.6, color: '#7fd8ff', intensity: 0.3 } }, (ctx, u) => {
     rectPath(ctx, -u * 0.24, -u * 0.16, u * 0.48, u * 0.32, u * 0.02);
     shp(ctx, '#4a2f22', 'rgba(0,0,0,0.5)', u * 0.025);
     rectPath(ctx, -u * 0.21, -u * 0.13, u * 0.2, u * 0.26, u * 0.01); shp(ctx, '#e8e0c8', null);
@@ -456,7 +460,7 @@ defProp('spell_tome', 'Open Tome', 'arcane',
 /* ================= LIGHT — hanging and ornate ================= */
 
 defProp('chandelier', 'Chandelier', 'light',
-  { size: 1.7, light: { range: 6, color: '#ffd08a', intensity: 1 } }, (ctx, u) => {
+  { size: 1.7, h: 2.6, floats: true, light: { range: 6, color: '#ffd08a', intensity: 1 } }, (ctx, u) => {
     glow(ctx, u * 0.85, '#ffd08a', 0.22);
     ctx.strokeStyle = BRASS_D; ctx.lineWidth = u * 0.03;
     for (let i = 0; i < 4; i++) {
@@ -471,7 +475,7 @@ defProp('chandelier', 'Chandelier', 'light',
   });
 
 defProp('chandelier_grand', 'Grand Chandelier', 'light',
-  { size: 2.6, light: { range: 8, color: '#ffd8a0', intensity: 1 } }, (ctx, u) => {
+  { size: 2.6, h: 2.8, floats: true, light: { range: 8, color: '#ffd8a0', intensity: 1 } }, (ctx, u) => {
     glow(ctx, u * 1.3, '#ffd8a0', 0.24);
     ctx.strokeStyle = GOLD_D; ctx.lineWidth = u * 0.035;
     for (let i = 0; i < 6; i++) {
@@ -497,7 +501,7 @@ defProp('chandelier_grand', 'Grand Chandelier', 'light',
   });
 
 defProp('candelabra', 'Candelabra', 'light',
-  { size: 0.9, light: { range: 3.5, color: '#ffe0a0', intensity: 0.7 } }, (ctx, u) => {
+  { size: 0.9, h: 0.9, light: { range: 3.5, color: '#ffe0a0', intensity: 0.7 } }, (ctx, u) => {
     ctx.strokeStyle = BRASS_D; ctx.lineWidth = u * 0.035;
     ctx.beginPath();
     ctx.moveTo(-u * 0.26, -u * 0.04); ctx.quadraticCurveTo(0, -u * 0.2, u * 0.26, -u * 0.04);
@@ -511,7 +515,7 @@ defProp('candelabra', 'Candelabra', 'light',
   });
 
 defProp('wall_sconce', 'Wall Sconce', 'light',
-  { size: 0.55, snap: true, light: { range: 3, color: '#ff9d4c', intensity: 0.6 } }, (ctx, u) => {
+  { size: 0.55, h: 0.35, snap: true, light: { range: 3, color: '#ff9d4c', intensity: 0.6 } }, (ctx, u) => {
     poly(ctx, [[-u * 0.14, u * 0.18], [u * 0.14, u * 0.18], [u * 0.08, u * 0.02], [-u * 0.08, u * 0.02]]);
     shp(ctx, BRASS_D, 'rgba(0,0,0,0.5)', u * 0.025);
     circ(ctx, 0, -u * 0.04, u * 0.1); shp(ctx, BRASS, 'rgba(0,0,0,0.35)', u * 0.018);
@@ -520,7 +524,7 @@ defProp('wall_sconce', 'Wall Sconce', 'light',
   });
 
 defProp('hanging_lantern', 'Hanging Lantern', 'light',
-  { size: 0.8, light: { range: 4, color: '#ffcf8a', intensity: 0.75 } }, (ctx, u) => {
+  { size: 0.8, h: 2.2, floats: true, light: { range: 4, color: '#ffcf8a', intensity: 0.75 } }, (ctx, u) => {
     glow(ctx, u * 0.4, '#ffcf8a', 0.2);
     ctx.strokeStyle = METAL_D; ctx.lineWidth = u * 0.022;
     for (let i = 0; i < 4; i++) {
@@ -533,7 +537,7 @@ defProp('hanging_lantern', 'Hanging Lantern', 'light',
   });
 
 defProp('brazier_grand', 'Grand Brazier', 'light',
-  { size: 1.3, snap: true, light: { range: 6.5, color: '#ff9d4c', intensity: 1 } }, (ctx, u, rnd) => {
+  { size: 1.3, h: 1, snap: true, light: { range: 6.5, color: '#ff9d4c', intensity: 1 } }, (ctx, u, rnd) => {
     glow(ctx, u * 0.7, '#ff9d4c', 0.25);
     for (let i = 0; i < 3; i++) {
       const a = (i / 3) * Math.PI * 2 + 0.5;
@@ -548,7 +552,7 @@ defProp('brazier_grand', 'Grand Brazier', 'light',
   });
 
 defProp('fire_pit', 'Fire Pit', 'light',
-  { size: 2, light: { range: 7, color: '#ff8f3c', intensity: 1 } }, (ctx, u, rnd) => {
+  { size: 2, h: 0.35, light: { range: 7, color: '#ff8f3c', intensity: 1 } }, (ctx, u, rnd) => {
     glow(ctx, u * 1, '#ff8f3c', 0.22);
     circ(ctx, 0, 0, u * 0.9); shp(ctx, '#5f5951', 'rgba(0,0,0,0.5)', u * 0.05);
     for (let i = 0; i < 12; i++) {
@@ -570,7 +574,7 @@ defProp('fire_pit', 'Fire Pit', 'light',
   });
 
 defProp('will_o_wisp', 'Wisp', 'light',
-  { size: 0.5, light: { range: 3, color: '#8fffd0', intensity: 0.55 } }, (ctx, u) => {
+  { size: 0.5, h: 1.2, floats: true, light: { range: 3, color: '#8fffd0', intensity: 0.55 } }, (ctx, u) => {
     glow(ctx, u * 0.25, '#8fffd0', 0.75);
     circ(ctx, 0, 0, u * 0.07); shp(ctx, '#e6fff6', null);
   });
@@ -649,7 +653,7 @@ defProp('mosaic_floor', 'Floor Mosaic', 'furniture', { size: 3, under: true, sna
   circ(ctx, 0, 0, u * 0.22); shp(ctx, GOLD, GOLD_D, u * 0.025);
 });
 
-defProp('banquet_table', 'Banquet Table', 'furniture', { size: 4.2, snap: true }, (ctx, u) => {
+defProp('banquet_table', 'Banquet Table', 'furniture', { size: 4.2, h: 0.5, snap: true }, (ctx, u) => {
   const w = u * 4, h = u * 1.1;
   rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.05);
   shp(ctx, WOOD_D, OUTLINE, u * 0.045);
@@ -671,7 +675,7 @@ defProp('banquet_table', 'Banquet Table', 'furniture', { size: 4.2, snap: true }
   }
 });
 
-defProp('four_poster_bed', 'Four-Poster Bed', 'furniture', { size: 2.8, snap: true }, (ctx, u) => {
+defProp('four_poster_bed', 'Four-Poster Bed', 'furniture', { size: 2.8, h: 1.6, snap: true }, (ctx, u) => {
   const w = u * 1.5, h = u * 2.3;
   rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.05);
   shp(ctx, '#3d2a1c', 'rgba(0,0,0,0.55)', u * 0.045);
@@ -689,7 +693,7 @@ defProp('four_poster_bed', 'Four-Poster Bed', 'furniture', { size: 2.8, snap: tr
   }
 });
 
-defProp('pipe_organ', 'Pipe Organ', 'furniture', { size: 3, snap: true }, (ctx, u) => {
+defProp('pipe_organ', 'Pipe Organ', 'furniture', { size: 3, h: 2.4, snap: true }, (ctx, u) => {
   const w = u * 2.6, h = u * 1.0;
   rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.04);
   shp(ctx, WOOD_D, 'rgba(0,0,0,0.55)', u * 0.045);
@@ -710,7 +714,7 @@ defProp('pipe_organ', 'Pipe Organ', 'furniture', { size: 3, snap: true }, (ctx, 
   ctx.stroke();
 });
 
-defProp('harp', 'Harp', 'furniture', { size: 1.2, snap: true }, (ctx, u) => {
+defProp('harp', 'Harp', 'furniture', { size: 1.2, h: 1.1, snap: true }, (ctx, u) => {
   ctx.beginPath();
   ctx.moveTo(-u * 0.26, u * 0.34);
   ctx.quadraticCurveTo(-u * 0.4, -u * 0.2, u * 0.1, -u * 0.36);
@@ -728,7 +732,7 @@ defProp('harp', 'Harp', 'furniture', { size: 1.2, snap: true }, (ctx, u) => {
   ctx.stroke();
 });
 
-defProp('wardrobe', 'Wardrobe', 'furniture', { size: 1.4, snap: true }, (ctx, u) => {
+defProp('wardrobe', 'Wardrobe', 'furniture', { size: 1.4, h: 1.6, snap: true }, (ctx, u) => {
   const w = u * 1.15, h = u * 0.6;
   rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.04);
   shp(ctx, WOOD_D, OUTLINE, u * 0.04);
@@ -740,7 +744,7 @@ defProp('wardrobe', 'Wardrobe', 'furniture', { size: 1.4, snap: true }, (ctx, u)
   circ(ctx, u * 0.04, 0, u * 0.03); shp(ctx, GOLD, null);
 });
 
-defProp('grand_clock', 'Longcase Clock', 'furniture', { size: 0.9, snap: true }, (ctx, u) => {
+defProp('grand_clock', 'Longcase Clock', 'furniture', { size: 0.9, h: 1.6, snap: true }, (ctx, u) => {
   rectPath(ctx, -u * 0.18, -u * 0.3, u * 0.36, u * 0.6, u * 0.04);
   shp(ctx, WOOD_D, 'rgba(0,0,0,0.5)', u * 0.035);
   circ(ctx, 0, -u * 0.13, u * 0.12); shp(ctx, '#e8e0c8', GOLD_D, u * 0.022);
@@ -752,7 +756,7 @@ defProp('grand_clock', 'Longcase Clock', 'furniture', { size: 0.9, snap: true },
   circ(ctx, 0, u * 0.14, u * 0.05); shp(ctx, GOLD, GOLD_D, u * 0.016);
 });
 
-defProp('display_case', 'Display Case', 'furniture', { size: 1.5, snap: true }, (ctx, u) => {
+defProp('display_case', 'Display Case', 'furniture', { size: 1.5, h: 0.9, snap: true }, (ctx, u) => {
   const w = u * 1.3, h = u * 0.62;
   rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.03);
   shp(ctx, WOOD_D, OUTLINE, u * 0.035);
@@ -763,7 +767,7 @@ defProp('display_case', 'Display Case', 'furniture', { size: 1.5, snap: true }, 
   shp(ctx, METAL_L, 'rgba(0,0,0,0.3)', u * 0.016);
 });
 
-defProp('bookshelf_grand', 'Library Stack', 'furniture', { size: 2.6, snap: true }, (ctx, u, rnd) => {
+defProp('bookshelf_grand', 'Library Stack', 'furniture', { size: 2.6, h: 1.6, snap: true }, (ctx, u, rnd) => {
   const w = u * 2.4, h = u * 0.7;
   rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.03);
   shp(ctx, '#3d2a1c', OUTLINE, u * 0.04);
@@ -782,7 +786,7 @@ defProp('bookshelf_grand', 'Library Stack', 'furniture', { size: 2.6, snap: true
   ctx.beginPath(); ctx.moveTo(-w / 2, 0); ctx.lineTo(w / 2, 0); ctx.stroke();
 });
 
-defProp('treasure_pile', 'Treasure Hoard', 'dressing', { size: 1.6 }, (ctx, u, rnd) => {
+defProp('treasure_pile', 'Treasure Hoard', 'dressing', { size: 1.6, h: 0.35 }, (ctx, u, rnd) => {
   blob(ctx, u * 0.62, 11, 0.3, rnd);
   shp(ctx, GOLD_D, 'rgba(0,0,0,0.4)', u * 0.03);
   for (let i = 0; i < 26; i++) {
@@ -803,7 +807,7 @@ defProp('treasure_pile', 'Treasure Hoard', 'dressing', { size: 1.6 }, (ctx, u, r
 
 /* ================= VEHICLES ================= */
 
-defProp('skyship', 'Skyship', 'vehicle', { size: 12, blocks: true }, (ctx, u, rnd) => {
+defProp('skyship', 'Skyship', 'vehicle', { size: 12, h: 1.2, blocks: true }, (ctx, u, rnd) => {
   const L = u * 11, B = u * 3.3;
   // hull, bow to the right
   ctx.beginPath();
@@ -881,7 +885,7 @@ defProp('skyship', 'Skyship', 'vehicle', { size: 12, blocks: true }, (ctx, u, rn
   ctx.beginPath(); ctx.moveTo(L * 0.46, 0); ctx.lineTo(L * 0.62, 0); ctx.stroke();
 });
 
-defProp('sky_skiff', 'Sky Skiff', 'vehicle', { size: 5, blocks: true }, (ctx, u) => {
+defProp('sky_skiff', 'Sky Skiff', 'vehicle', { size: 5, h: 0.8, blocks: true }, (ctx, u) => {
   const L = u * 4.4, B = u * 1.5;
   ctx.beginPath();
   ctx.moveTo(L * 0.5, 0);
@@ -911,7 +915,7 @@ defProp('sky_skiff', 'Sky Skiff', 'vehicle', { size: 5, blocks: true }, (ctx, u)
   circ(ctx, -L * 0.34, 0, u * 0.13); shp(ctx, '#7d5c3a', '#3a2a1c', u * 0.03);
 });
 
-defProp('ships_wheel', 'Ship’s Wheel', 'vehicle', { size: 0.9, snap: true }, (ctx, u) => {
+defProp('ships_wheel', 'Ship’s Wheel', 'vehicle', { size: 0.9, h: 0.8, snap: true }, (ctx, u) => {
   circ(ctx, 0, 0, u * 0.3); shp(ctx, null, WOOD_D, u * 0.07);
   circ(ctx, 0, 0, u * 0.3); shp(ctx, null, WOOD_L, u * 0.03);
   ctx.strokeStyle = WOOD_D; ctx.lineWidth = u * 0.035;
@@ -924,7 +928,7 @@ defProp('ships_wheel', 'Ship’s Wheel', 'vehicle', { size: 0.9, snap: true }, (
   circ(ctx, 0, 0, u * 0.09); shp(ctx, BRASS, BRASS_D, u * 0.02);
 });
 
-defProp('ballista', 'Ballista', 'vehicle', { size: 1.8, snap: true }, (ctx, u) => {
+defProp('ballista', 'Ballista', 'vehicle', { size: 1.8, h: 0.7, snap: true }, (ctx, u) => {
   rectPath(ctx, -u * 0.5, -u * 0.24, u * 1.0, u * 0.48, u * 0.05);
   shp(ctx, WOOD_D, 'rgba(0,0,0,0.55)', u * 0.04);
   rectPath(ctx, -u * 0.42, -u * 0.09, u * 0.9, u * 0.18, u * 0.03);
@@ -944,7 +948,7 @@ defProp('ballista', 'Ballista', 'vehicle', { size: 1.8, snap: true }, (ctx, u) =
   for (const sy of [-1, 1]) { circ(ctx, -u * 0.34, sy * u * 0.26, u * 0.12); shp(ctx, '#3a2a1c', 'rgba(0,0,0,0.5)', u * 0.025); }
 });
 
-defProp('catapult', 'Catapult', 'vehicle', { size: 2.4, snap: true }, (ctx, u) => {
+defProp('catapult', 'Catapult', 'vehicle', { size: 2.4, h: 1, snap: true }, (ctx, u) => {
   rectPath(ctx, -u * 0.7, -u * 0.34, u * 1.4, u * 0.68, u * 0.05);
   shp(ctx, WOOD_D, 'rgba(0,0,0,0.55)', u * 0.045);
   rectPath(ctx, -u * 0.6, -u * 0.12, u * 1.2, u * 0.24, u * 0.03);
@@ -961,7 +965,7 @@ defProp('catapult', 'Catapult', 'vehicle', { size: 2.4, snap: true }, (ctx, u) =
   }
 });
 
-defProp('wagon_covered', 'Covered Wagon', 'vehicle', { size: 3, snap: true }, (ctx, u) => {
+defProp('wagon_covered', 'Covered Wagon', 'vehicle', { size: 3, h: 1.4, snap: true }, (ctx, u) => {
   const w = u * 2.6, h = u * 1.3;
   rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.05);
   shp(ctx, WOOD_D, 'rgba(0,0,0,0.55)', u * 0.045);
@@ -981,7 +985,7 @@ defProp('wagon_covered', 'Covered Wagon', 'vehicle', { size: 3, snap: true }, (c
   }
 });
 
-defProp('gangplank', 'Gangplank', 'vehicle', { size: 2.6, snap: true }, (ctx, u) => {
+defProp('gangplank', 'Gangplank', 'vehicle', { size: 2.6, h: 0.1, snap: true }, (ctx, u) => {
   const w = u * 2.4, h = u * 0.55;
   rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.02);
   shp(ctx, WOOD_M, 'rgba(0,0,0,0.5)', u * 0.035);
