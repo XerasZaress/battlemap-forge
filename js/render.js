@@ -830,7 +830,51 @@ function drawEdgeWalls(ctx, map, u, opts, seed) {
 /* ---------------- props & doors ---------------- */
 
 function drawProps(ctx, map, u, opts) {
-  const list = map.props.slice().sort((a, b) => {
+  drawPropList(ctx, map, u, opts, map.props.filter(p => !propIsSunk(map, p)));
+}
+
+/** A prop only sinks where there is something to sink into: carry the flag on
+    one dragged out of the pool, but draw it like anything else on dry ground. */
+function propIsSunk(map, p) {
+  if (!p.sunk) return false;
+  const t = map.get(Math.floor(p.x), Math.floor(p.y));
+  return !!(MATS[t] && MATS[t].liquid);
+}
+
+/**
+ * Props the user has sunk into the liquid they stand in.
+ *
+ * They are drawn before the caustics rather than after, so the water moves over
+ * them, and veiled in the colour of that liquid so depth reads — a chest under
+ * deep water should not look like a chest sitting on it.
+ */
+function drawSunkProps(ctx, map, u, opts) {
+  const sunk = map.props.filter(p => PROPS[p.type] && propIsSunk(map, p));
+  if (!sunk.length) return;
+  // one veil pass per liquid, rather than one canvas per prop
+  const groups = new Map();
+  for (const p of sunk) {
+    const t = map.get(Math.floor(p.x), Math.floor(p.y));
+    if (!groups.has(t)) groups.set(t, []);
+    groups.get(t).push(p);
+  }
+  for (const [t, list] of groups) {
+    const layer = makeCanvas(map.w * u, map.h * u);
+    const lc = layer.getContext('2d');
+    drawPropList(lc, map, u, opts, list);
+    const m = MATS[t];
+    lc.globalCompositeOperation = 'source-atop';
+    lc.fillStyle = `rgba(${m.c1[0]},${m.c1[1]},${m.c1[2]},${SUNK_VEIL[t] || 0.34})`;
+    lc.fillRect(0, 0, map.w * u, map.h * u);
+    ctx.drawImage(layer, 0, 0);
+  }
+}
+
+/** How much of the liquid stands between the viewer and a sunk prop. */
+const SUNK_VEIL = { [T.WATER]: 0.3, [T.DEEP]: 0.55, [T.LAVA]: 0.62 };
+
+function drawPropList(ctx, map, u, opts, props) {
+  const list = props.slice().sort((a, b) => {
     const ua = PROPS[a.type] && PROPS[a.type].under ? 0 : 1;
     const ub = PROPS[b.type] && PROPS[b.type].under ? 0 : 1;
     return ua - ub || a.y - b.y;
@@ -839,9 +883,10 @@ function drawProps(ctx, map, u, opts) {
     const def = PROPS[p.type];
     if (!def) continue;
     // over a liquid, a plain drop shadow is lost in the moving texture, so add
-    // a contact shadow that reads as the object resting on the surface
+    // a contact shadow that reads as the object resting on the surface — which
+    // is exactly the wrong read for one that has sunk into it
     const under = map.get(Math.floor(p.x), Math.floor(p.y));
-    if (opts.shadows && !def.under && MATS[under] && MATS[under].liquid) {
+    if (opts.shadows && !def.under && !p.sunk && MATS[under] && MATS[under].liquid) {
       const rr = def.size * (p.scale === undefined ? 1 : p.scale) * 0.46 * u;
       const g = ctx.createRadialGradient(p.x * u, p.y * u, rr * 0.2, p.x * u, p.y * u, rr);
       g.addColorStop(0, 'rgba(0,0,0,0.5)');
@@ -1308,6 +1353,7 @@ function renderMap(map, optsIn) {
   } else {
     drawBase(ctx, map, u, opts, seed);
     drawTileDetail(ctx, map, u, seed, roomIndexMap(map, rooms), opts.water && opts.water.flow);
+    if (opts.props) drawSunkProps(ctx, map, u, opts);
     drawWaterFlow(ctx, map, u, opts);
     drawLavaFlow(ctx, map, u, opts);
     drawWalls(ctx, map, u, opts, seed);

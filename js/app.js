@@ -24,6 +24,7 @@ const state = {
   propScale: 1,
   propWidth: 1,
   propHeight: 1,
+  propSunk: false,     // place the next prop below the water surface
   snapDeg: 90,         // 0 = free rotation
   selected: null,      // index into map.props while the Select tool is active
   undo: [], redo: [],
@@ -134,8 +135,10 @@ function compose() {
   const ctx = cv.getContext('2d');
   ctx.drawImage(state.terrain, 0, 0);
   // caustics sit on the water but under everything standing on it, otherwise
-  // a table over a pool looks submerged
+  // a table over a pool looks submerged — props the user has actually sunk go
+  // the other side of them, which is what makes them read as under the surface
   const liquidOpts = { water: { flow: num('waterFlow'), speed: num('waterSpeed'), phase: state.waterPhase } };
+  drawSunkProps(ctx, map, u, opts);
   if (state.waterPath) drawWaterFlow(ctx, map, u, liquidOpts, state.waterPath);
   if (state.lavaPath) drawLavaFlow(ctx, map, u, liquidOpts, state.lavaPath);
   if (state.bg.img) drawTraceOverlay(ctx, map, u);
@@ -1104,6 +1107,7 @@ function syncTransformUI() {
   $('propWidthLbl').textContent = state.propWidth.toFixed(2);
   $('propHeight').value = state.propHeight;
   $('propHeightLbl').textContent = state.propHeight.toFixed(2);
+  $('propSunk').checked = p ? !!p.sunk : state.propSunk;
   $('transformBox').classList.toggle('editing', !!p);
   $('tformTitle').textContent = p
     ? 'Editing ' + ((PROPS[p.type] && PROPS[p.type].label) || 'prop')
@@ -1163,12 +1167,16 @@ function placeProp(cell) {
   const vary = $('propRandomRot').checked && def.rand !== false;
   // the snap dropdown is authoritative here — snapAngle is a no-op when set to free
   const rot = vary ? snapAngle(rnd.range(0, Math.PI * 2)) : state.propRot;
-  map.addProp(state.prop, cell.fx, cell.fy, {
+  // the checkbox decides and nothing else: a prop that submerged itself the
+  // moment it touched deep water contradicted the box sitting unticked, and the
+  // veil that came with it read as the old blue tint coming back
+  const sunk = state.propSunk;
+  map.addProp(state.prop, cell.fx, cell.fy, Object.assign({
     rot,
     scale: state.propScale * (vary ? rnd.range(0.9, 1.1) : 1),
     width: state.propWidth,
     height: state.propHeight
-  });
+  }, sunk ? { sunk: true } : null));
   syncLightsFromProps(map);
 }
 
@@ -1923,6 +1931,9 @@ function renderForExport(withGrid) {
     const cv = makeCanvas(map.w * ppg, map.h * ppg);
     const ctx = cv.getContext('2d');
     drawBackgroundImage(ctx, map, ppg);
+    // traced art has no water layer of ours to sink under, but the props are
+    // still the user's and must not vanish from the export
+    drawSunkProps(ctx, map, ppg, opts);
     drawProps(ctx, map, ppg, opts);
     drawDoors(ctx, map, ppg);
     if (opts.lighting) drawLighting(ctx, map, ppg, opts);
@@ -2185,6 +2196,12 @@ function wire() {
   $('propHeight').addEventListener('input', () => {
     state.propHeight = clamp(num('propHeight'), 0.25, 4);
     syncTransformUI(); applyTransformToSelection();
+  });
+  $('propSunk').addEventListener('change', () => {
+    const p = selectedProp();
+    if (p) { snapshot(); p.sunk = $('propSunk').checked; refresh(false); }
+    else state.propSunk = $('propSunk').checked;
+    syncTransformUI();
   });
   $('propSnap').addEventListener('change', () => {
     state.snapDeg = parseInt($('propSnap').value, 10) || 0;
