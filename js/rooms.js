@@ -1,7 +1,7 @@
 /* Battlemap Forge — prefab rooms.
    Each is a furnished module you stamp onto the map: it fills its floor,
    walls its own perimeter and brings its furniture with it.
-   Props are [type, x, y, quarterTurns, scale, width] in room-local squares. */
+   Props are [type, x, y, quarterTurns, scale, width, sunk] in room-local squares. */
 'use strict';
 
 const ROOMS = {};
@@ -219,6 +219,7 @@ function transformRoom(key, rot, flip) {
     rot: (p[3] || 0) * Q,
     scale: p[4] === undefined ? 1 : p[4],
     width: p[5] === undefined ? 1 : p[5],
+    sunk: !!p[6],
     mirror: false
   }));
 
@@ -318,7 +319,7 @@ function stampRoom(map, key, ox, oy, opts) {
     for (const p of room.props) {
       if (!PROPS[p.type]) continue;
       map.addProp(p.type, ox + p.x, oy + p.y, {
-        rot: p.rot, scale: p.scale, width: p.width, mirror: p.mirror,
+        rot: p.rot, scale: p.scale, width: p.width, mirror: p.mirror, sunk: p.sunk,
         pid: o.pid                      // ties the prop to its placement
       });
     }
@@ -512,9 +513,11 @@ function captureRoom(map, x0, y0, x1, y1, label) {
   const props = [];
   for (const p of map.props) {
     if (p.x < ax || p.x > bx + 1 || p.y < ay || p.y > by + 1) continue;
-    props.push([p.type, +(p.x - ax).toFixed(3), +(p.y - ay).toFixed(3),
+    const t = [p.type, +(p.x - ax).toFixed(3), +(p.y - ay).toFixed(3),
       Math.round(((p.rot || 0) / Q) % 4), +(p.scale === undefined ? 1 : p.scale).toFixed(3),
-      +(p.width === undefined ? 1 : p.width).toFixed(3)]);
+      +(p.width === undefined ? 1 : p.width).toFixed(3)];
+    if (p.sunk) t.push(1);
+    props.push(t);
   }
 
   return {
