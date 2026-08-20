@@ -877,6 +877,10 @@ const SUNK_VEIL = { [T.WATER]: 0.3, [T.DEEP]: 0.55, [T.LAVA]: 0.62 };
  *  blitted from the cached raster, so it stays exactly as sharp at 140 px per
  *  square as it ever was. The raster only ever supplies shading underneath. */
 function drawPropArt(ctx, u, p, def, seed) {
+  // Every prop on the map shares this one context, so a draw function that
+  // leaves a save() unbalanced would shift everything drawn after it. Pinning
+  // the transform back keeps one prop's mistake to itself.
+  const t = ctx.getTransform();
   ctx.save();
   ctx.translate(p.x * u, p.y * u);
   ctx.rotate(p.rot || 0);
@@ -886,6 +890,7 @@ function drawPropArt(ctx, u, p, def, seed) {
   ctx.scale(sc * wd, sc * ht);
   def.draw(ctx, u, seededFn(seed));
   ctx.restore();
+  ctx.setTransform(t);
 }
 
 /**
@@ -898,7 +903,9 @@ function drawPropArt(ctx, u, p, def, seed) {
 function drawPropList(ctx, map, u, opts, props) {
   const flat = [], standing = [];
   for (const p of props) {
-    const def = PROPS[p.type];
+    // the family knows several forms of itself; resolve to the one this prop
+    // wears before anything reads its height or caches its silhouette
+    const def = propDefFor(PROPS[p.type], p.vi);
     if (!def) continue;
     // props saved before seeds were stored fall back to the old position-derived
     // roll, so an existing map looks exactly as it did

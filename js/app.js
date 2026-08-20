@@ -25,6 +25,7 @@ const state = {
   propWidth: 1,
   propHeight: 1,
   propSunk: false,     // place the next prop below the water surface
+  propVariant: 0,      // which form of a prop family to place
   snapDeg: 90,         // 0 = free rotation
   selected: null,      // index into map.props while the Select tool is active
   undo: [], redo: [],
@@ -1041,6 +1042,7 @@ function selectProp(i) {
     state.propScale = p.scale === undefined ? 1 : p.scale;
     state.propWidth = p.width === undefined ? 1 : p.width;
     state.propHeight = p.height === undefined ? 1 : p.height;
+    state.propVariant = p.vi || 0;
     state.prop = p.type;
     const def = PROPS[p.type];
     if (def && def.cat !== state.propCat) state.propCat = def.cat;
@@ -1110,6 +1112,7 @@ function syncTransformUI() {
   $('propHeight').value = state.propHeight;
   $('propHeightLbl').textContent = state.propHeight.toFixed(2);
   $('propSunk').checked = p ? !!p.sunk : state.propSunk;
+  buildVariantRow();
   $('transformBox').classList.toggle('editing', !!p);
   $('tformTitle').textContent = p
     ? 'Editing ' + ((PROPS[p.type] && PROPS[p.type].label) || 'prop')
@@ -1120,6 +1123,50 @@ function syncTransformUI() {
   drawPropPreview();
 }
 
+/**
+ * The forms a family comes in, as a row of swatches under the preview.
+ *
+ * A family is one picker entry however many forms it has, so this is where the
+ * choice lives. With a prop selected it re-forms that prop; with nothing
+ * selected it chooses what the next one will be.
+ */
+function buildVariantRow() {
+  const row = $('propVariants');
+  if (!row) return;
+  row.innerHTML = '';
+  const fam = PROPS[state.prop];
+  if (!fam || !fam.variants) return;
+  const sel = selectedProp();
+  const current = sel ? (sel.vi || 0) : state.propVariant;
+  fam.variants.forEach((v, i) => {
+    const b = document.createElement('button');
+    b.title = v.label + '  ·  press C to cycle';
+    b.className = i === current ? 'active' : '';
+    const c = makeCanvas(30, 30);
+    const cx = c.getContext('2d');
+    cx.translate(15, 15);
+    const d = propDefFor(fam, i);
+    try { d.draw(cx, 26 / Math.max(1, d.size), seededFn(7)); } catch (e) { /* swatch only */ }
+    b.appendChild(c);
+    b.addEventListener('click', () => setPropVariant(i));
+    row.appendChild(b);
+  });
+}
+
+/** Choose a form: re-forms the selected prop, or sets what gets placed next. */
+function setPropVariant(i) {
+  const fam = PROPS[state.prop];
+  if (!fam || !fam.variants) return;
+  state.propVariant = ((i % fam.variants.length) + fam.variants.length) % fam.variants.length;
+  const p = selectedProp();
+  if (p && p.type === state.prop) {
+    snapshot();
+    p.vi = state.propVariant;
+    refresh(false);
+  }
+  syncTransformUI();
+}
+
 /** Preview the current prop at the current transform, over a 3×3 patch of grid. */
 function drawPropPreview() {
   const cv = $('propPreview');
@@ -1127,7 +1174,7 @@ function drawPropPreview() {
   const ctx = cv.getContext('2d');
   const W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
-  const def = PROPS[state.prop];
+  const def = propDefFor(PROPS[state.prop], state.propVariant);
   if (!def) return;
 
   const cells = 3, u = W / cells;
@@ -1173,12 +1220,15 @@ function placeProp(cell) {
   // moment it touched deep water contradicted the box sitting unticked, and the
   // veil that came with it read as the old blue tint coming back
   const sunk = state.propSunk;
+  // a family scattered by the generator wants variety; one you place yourself
+  // wants the form you picked
+  const vi = def.variants ? (vary ? rnd.int(0, def.variants.length - 1) : state.propVariant) : 0;
   map.addProp(state.prop, cell.fx, cell.fy, Object.assign({
     rot,
     scale: state.propScale * (vary ? rnd.range(0.9, 1.1) : 1),
     width: state.propWidth,
     height: state.propHeight
-  }, sunk ? { sunk: true } : null));
+  }, sunk ? { sunk: true } : null, vi ? { vi } : null));
   syncLightsFromProps(map);
 }
 
@@ -1511,6 +1561,10 @@ window.addEventListener('keydown', (ev) => {
   if (k === ' ') { state.spaceDown = true; ev.preventDefault(); return; }
   if (k === 'g') { ev.preventDefault(); generate(); return; }
   if (k === 'f') { fitView(); return; }
+  if (k === 'c' && PROPS[state.prop] && PROPS[state.prop].variants) {
+    setPropVariant(state.propVariant + (ev.shiftKey ? -1 : 1));
+    return;
+  }
   if (k === '0') { state.view.zoom = state.map.ppg / state.workPpg; updateZoomLabel(); paint(); return; }
   if (k === '[') { setBrush(state.brush - 1); return; }
   if (k === ']') { setBrush(state.brush + 1); return; }
@@ -1620,12 +1674,15 @@ function buildPropPanel() {
     ctx.fillStyle = '#2a2f3c'; ctx.fillRect(0, 0, 52, 52);
     ctx.save();
     ctx.translate(26, 26);
-    const u = 44 / Math.max(1, def.size);
+    // `shown` is the loop's counter — this is the form to draw
+    const thumb = def.key === state.prop ? propDefFor(def, state.propVariant) : def;
+    const u = 44 / Math.max(1, thumb.size);
     ctx.scale(1, 1);
-    try { def.draw(ctx, u, seededFn(7)); } catch (e) { /* thumbnail only */ }
+    try { thumb.draw(ctx, u, seededFn(7)); } catch (e) { /* thumbnail only */ }
     ctx.restore();
     cell.appendChild(c);
     cell.addEventListener('click', () => {
+      if (def.key !== state.prop) state.propVariant = 0;
       state.prop = def.key;
       setTool('prop');
       buildPropPanel();
@@ -1638,6 +1695,7 @@ function buildPropPanel() {
     p.textContent = q ? 'No props match “' + q + '”.' : 'Nothing in this category yet.';
     grid.appendChild(p);
   }
+  buildVariantRow();
   drawPropPreview();
 }
 
