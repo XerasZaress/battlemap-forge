@@ -445,7 +445,9 @@ function floatAction(act) {
     const copy = JSON.parse(JSON.stringify(p));
     copy.x += 0.6; copy.y += 0.6;
     delete copy.pid;                    // a copy belongs to you, not to a room
-    state.map.props.push(copy);
+    delete copy.sd;                     // and rolls its own detail, so that two
+    delete copy.type;                   // rubble piles are not twins
+    state.map.addProp(p.type, copy.x, copy.y, copy);
     syncLightsFromProps(state.map);
     selectProp(state.map.props.length - 1);
     refresh(false);

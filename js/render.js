@@ -900,7 +900,9 @@ function drawPropList(ctx, map, u, opts, props) {
   for (const p of props) {
     const def = PROPS[p.type];
     if (!def) continue;
-    const entry = { p, def, seed: Math.round(p.x * 977 + p.y * 331) };
+    // props saved before seeds were stored fall back to the old position-derived
+    // roll, so an existing map looks exactly as it did
+    const entry = { p, def, seed: p.sd === undefined ? Math.round(p.x * 977 + p.y * 331) : p.sd };
     // `under` is the flat set, not "anything with no height" — a map marker has
     // no height either, and it belongs on top of the furniture, not beneath it.
     (def.under ? flat : standing).push(entry);
