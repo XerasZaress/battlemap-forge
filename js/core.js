@@ -236,7 +236,13 @@ class GameMap {
   /** rot: radians. scale: overall size. width: extra stretch across the prop's
       own x-axis, so a table can be made long without becoming fat. */
   addProp(type, x, y, opts) {
-    this.props.push(Object.assign({ type, x, y, rot: 0, scale: 1, width: 1, height: 1 }, opts || {}));
+    const p = Object.assign({ type, x, y, rot: 0, scale: 1, width: 1, height: 1 }, opts || {});
+    // A prop that draws itself with its seeded rng — rubble, foliage, a broken
+    // barrel — must keep the same roll for life, or dragging it re-rolls its
+    // shape under the cursor. Derived from the map seed and the order props
+    // were added, so regenerating a seed reproduces the map exactly.
+    if (p.sd === undefined) p.sd = hashString(String(this.seed) + ':' + this.props.length) & 0xffff;
+    this.props.push(p);
   }
   clone() {
     const m = new GameMap(this.w, this.h, this.ppg);

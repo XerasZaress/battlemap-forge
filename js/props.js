@@ -21,6 +21,89 @@ function defProp(key, label, cat, opts, draw) {
   return p;
 }
 
+/**
+ * A family is one prop that knows several forms of itself: three woods by four
+ * shapes is twelve barrels from one draw function, and they cannot drift apart
+ * in style because they share the geometry and the palette.
+ *
+ * Axes are crossed to make the variant list, so `{ wood: [3], form: [4] }` is
+ * twelve. The family occupies a single entry in the picker — cycling happens
+ * there — because four hundred picker cells is a worse library than a hundred.
+ */
+function defFamily(key, label, cat, opts, draw) {
+  const axes = opts.axes || {};
+  const names = Object.keys(axes);
+  let variants = [{}];
+  for (const n of names) {
+    const grown = [];
+    for (const base of variants) for (const val of axes[n]) grown.push(Object.assign({}, base, { [n]: val }));
+    variants = grown;
+  }
+  if (opts.pick) variants = variants.filter(opts.pick);
+  variants.forEach((v, i) => {
+    v.i = i;
+    v.label = names.map(n => v[n].label || v[n]).join(' ');
+    v.over = {};
+    // a variant may stand shorter than its family — a broken barrel is a third
+    // the height of a whole one, and its shadow has to know
+    for (const n of names) if (v[n] && v[n].over) Object.assign(v.over, v[n].over);
+  });
+  const def = defProp(key, label, cat, Object.assign({}, opts, { variants }),
+    (ctx, u, rnd) => draw(ctx, u, rnd, variants[0]));
+  def.drawVariant = draw;
+  return def;
+}
+
+/**
+ * The index of a form, choosing the axes you care about and rolling the rest.
+ *
+ * A tavern wants a long table or a round one — it has no opinion on the wood.
+ */
+function familyPick(famKey, sel, rng) {
+  const fam = PROPS[famKey];
+  if (!fam || !fam.variants) return 0;
+  const fits = fam.variants.filter(v => Object.keys(sel).every(a => v[a] && v[a].key === sel[a]));
+  const pool = fits.length ? fits : fam.variants;
+  return pool[rng ? rng.int(0, pool.length - 1) : 0].i;
+}
+
+/**
+ * An old prop key kept alive as one form of a family.
+ *
+ * `chair` and `table_long` are written into saved maps, prefab room specs and
+ * the generators, and they should go on meaning exactly the chair and the long
+ * table they always did. The alias is a real entry in PROPS so all of that
+ * keeps working, but it stays out of PROP_LIST, so the picker shows the family
+ * once rather than the family plus its ancestors.
+ */
+function aliasFamily(oldKey, label, familyKey, vi) {
+  const d = propDefFor(PROPS[familyKey], vi);
+  PROPS[oldKey] = Object.assign(Object.create(d), { key: oldKey, label });
+  return PROPS[oldKey];
+}
+
+/**
+ * The definition as one particular prop wears it.
+ *
+ * Everything downstream — the artwork, the height, the cached silhouette that
+ * js/shading.js throws a shadow from — reads this rather than the family, so a
+ * broken barrel gets its own shadow instead of borrowing the upright one's.
+ * The distinct `key` is what keeps them out of each other's cache entry.
+ */
+function propDefFor(def, vi) {
+  if (!def || !def.variants) return def;
+  const i = Math.max(0, Math.min(def.variants.length - 1, vi | 0));
+  const v = def.variants[i];
+  if (!v.def) {
+    v.def = Object.assign(Object.create(def), v.over, {
+      key: def.key + '#' + i,
+      variants: null,
+      draw: (ctx, u, rnd) => def.drawVariant(ctx, u, rnd, v)
+    });
+  }
+  return v.def;
+}
+
 /** Rotation for a newly placed prop: snapped to quarter turns for built objects. */
 function propRotation(def, rng) {
   if (def.rand === false) return 0;
@@ -65,37 +148,70 @@ const OUTLINE = 'rgba(0,0,0,0.55)';
 
 /* ================= Furniture ================= */
 
-defProp('table_round', 'Round Table', 'furniture', { size: 1.4, h: 0.5 }, (ctx, u, rnd) => {
-  const r = u * 0.62;
-  circ(ctx, 0, 0, r); shp(ctx, WOOD_M, OUTLINE, u * 0.035);
-  circ(ctx, 0, 0, r * 0.82); shp(ctx, WOOD_L, 'rgba(0,0,0,0.2)', u * 0.02);
-  circ(ctx, -r * 0.2, -r * 0.2, r * 0.28); shp(ctx, 'rgba(255,255,255,0.07)', null);
+const TABLE_WOODS = [
+  { key: 'oak', label: 'Oak', top: WOOD_M, face: WOOD_L, dark: WOOD_D },
+  { key: 'pine', label: 'Pine', top: '#9c7442', face: '#c19a62', dark: '#6d4f28' },
+  { key: 'ebony', label: 'Ebony', top: '#3b2c22', face: '#54402f', dark: '#241a14' }
+];
+const TABLE_FORMS = [
+  { key: 'round', label: 'Round', over: { size: 1.4 } },
+  { key: 'long', label: 'Long', over: { size: 2 } },
+  { key: 'square', label: 'Square', over: { size: 1.1 } }
+];
+
+defFamily('table', 'Table', 'furniture', {
+  size: 1.4, h: 0.5,
+  axes: { wood: TABLE_WOODS, form: TABLE_FORMS }
+}, (ctx, u, rnd, v) => {
+  const w = v.wood;
+  if (v.form.key === 'round') {
+    const r = u * 0.62;
+    circ(ctx, 0, 0, r); shp(ctx, w.top, OUTLINE, u * 0.035);
+    circ(ctx, 0, 0, r * 0.82); shp(ctx, w.face, 'rgba(0,0,0,0.2)', u * 0.02);
+    circ(ctx, -r * 0.2, -r * 0.2, r * 0.28); shp(ctx, 'rgba(255,255,255,0.07)', null);
+    return;
+  }
+  const ww = v.form.key === 'long' ? u * 2.0 : u * 0.95;
+  const hh = v.form.key === 'long' ? u * 0.9 : u * 0.95;
+  rectPath(ctx, -ww / 2, -hh / 2, ww, hh, u * 0.08); shp(ctx, w.top, OUTLINE, u * 0.035);
+  rectPath(ctx, -ww / 2 + u * 0.07, -hh / 2 + u * 0.07, ww - u * 0.14, hh - u * 0.14, u * 0.05);
+  shp(ctx, w.face, null);
+  grain(ctx, -ww / 2 + u * 0.07, -hh / 2 + u * 0.07, ww - u * 0.14, hh - u * 0.14, 5, 'rgba(0,0,0,0.18)', true);
 });
 
-defProp('table_long', 'Long Table', 'furniture', { size: 2, h: 0.5 }, (ctx, u, rnd) => {
-  const w = u * 2.0, h = u * 0.9;
-  rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.08); shp(ctx, WOOD_M, OUTLINE, u * 0.035);
-  rectPath(ctx, -w / 2 + u * 0.07, -h / 2 + u * 0.07, w - u * 0.14, h - u * 0.14, u * 0.05);
-  shp(ctx, WOOD_L, null);
-  grain(ctx, -w / 2 + u * 0.07, -h / 2 + u * 0.07, w - u * 0.14, h - u * 0.14, 5, 'rgba(0,0,0,0.18)', true);
-});
+aliasFamily('table_round', 'Round Table', 'table', 0);
+aliasFamily('table_long', 'Long Table', 'table', 1);
 
-defProp('chair', 'Chair', 'furniture', { size: 0.7, h: 0.75 }, (ctx, u) => {
+const SEAT_FORMS = [
+  { key: 'chair', label: 'Chair', over: { size: 0.7, h: 0.75 } },
+  { key: 'stool', label: 'Stool', over: { size: 0.5, h: 0.35 } },
+  { key: 'bench', label: 'Bench', over: { size: 1.6, h: 0.4 } }
+];
+
+defFamily('seat', 'Seating', 'furniture', {
+  size: 0.7, h: 0.75,
+  axes: { wood: TABLE_WOODS, form: SEAT_FORMS }
+}, (ctx, u, rnd, v) => {
+  const w = v.wood;
+  if (v.form.key === 'stool') {
+    circ(ctx, 0, 0, u * 0.21); shp(ctx, w.face, OUTLINE, u * 0.03);
+    circ(ctx, 0, 0, u * 0.1); shp(ctx, 'rgba(0,0,0,0.18)', null);
+    return;
+  }
+  if (v.form.key === 'bench') {
+    const bw = u * 1.5, bh = u * 0.38;
+    rectPath(ctx, -bw / 2, -bh / 2, bw, bh, u * 0.04); shp(ctx, w.top, OUTLINE, u * 0.03);
+    grain(ctx, -bw / 2, -bh / 2, bw, bh, 3, 'rgba(0,0,0,0.2)', false);
+    return;
+  }
   const s = u * 0.5;
-  rectPath(ctx, -s / 2, -s / 2, s, s, u * 0.05); shp(ctx, WOOD_M, OUTLINE, u * 0.03);
-  rectPath(ctx, -s / 2, -s / 2 - u * 0.11, s, u * 0.13, u * 0.04); shp(ctx, WOOD_D, OUTLINE, u * 0.025);
+  rectPath(ctx, -s / 2, -s / 2, s, s, u * 0.05); shp(ctx, w.top, OUTLINE, u * 0.03);
+  rectPath(ctx, -s / 2, -s / 2 - u * 0.11, s, u * 0.13, u * 0.04); shp(ctx, w.dark, OUTLINE, u * 0.025);
 });
 
-defProp('stool', 'Stool', 'furniture', { size: 0.5, h: 0.35 }, (ctx, u) => {
-  circ(ctx, 0, 0, u * 0.21); shp(ctx, WOOD_L, OUTLINE, u * 0.03);
-  circ(ctx, 0, 0, u * 0.1); shp(ctx, 'rgba(0,0,0,0.18)', null);
-});
-
-defProp('bench', 'Bench', 'furniture', { size: 1.6, h: 0.4 }, (ctx, u) => {
-  const w = u * 1.5, h = u * 0.38;
-  rectPath(ctx, -w / 2, -h / 2, w, h, u * 0.04); shp(ctx, WOOD_M, OUTLINE, u * 0.03);
-  grain(ctx, -w / 2, -h / 2, w, h, 3, 'rgba(0,0,0,0.2)', false);
-});
+aliasFamily('chair', 'Chair', 'seat', 0);
+aliasFamily('stool', 'Stool', 'seat', 1);
+aliasFamily('bench', 'Bench', 'seat', 2);
 
 defProp('bed', 'Bed', 'furniture', { size: 2, h: 0.45 }, (ctx, u) => {
   const w = u * 1.05, h = u * 1.9;
@@ -165,10 +281,76 @@ defProp('fireplace', 'Fireplace', 'structure', { size: 2, h: 1.4, light: { range
 
 /* ================= Containers & dungeon dressing ================= */
 
-defProp('barrel', 'Barrel', 'dressing', { size: 0.85, h: 0.7 }, (ctx, u) => {
-  circ(ctx, 0, 0, u * 0.36); shp(ctx, WOOD_M, OUTLINE, u * 0.035);
-  circ(ctx, 0, 0, u * 0.29); shp(ctx, null, METAL_M, u * 0.045);
-  circ(ctx, 0, 0, u * 0.16); shp(ctx, WOOD_L, 'rgba(0,0,0,0.3)', u * 0.02);
+const BAND_BRASS = '#b0862f';
+const BARREL_WOODS = [
+  { key: 'oak', label: 'Oak', stave: WOOD_M, lid: WOOD_L, dark: WOOD_D, band: METAL_M },
+  { key: 'pine', label: 'Pine', stave: '#9c7442', lid: '#bb9059', dark: '#6d4f28', band: METAL_M },
+  { key: 'ebony', label: 'Ebony', stave: '#3b2c22', lid: '#54402f', dark: '#241a14', band: BAND_BRASS }
+];
+const BARREL_FORMS = [
+  { key: 'shut', label: 'Sealed' },
+  { key: 'open', label: 'Open' },
+  { key: 'side', label: 'On its side', over: { h: 0.45, size: 1 } },
+  { key: 'broken', label: 'Broken', over: { h: 0.3 } }
+];
+
+defFamily('barrel', 'Barrel', 'dressing', {
+  size: 0.85, h: 0.7,
+  axes: { wood: BARREL_WOODS, form: BARREL_FORMS }
+}, (ctx, u, rnd, v) => {
+  const w = v.wood, r = u * 0.36;
+  if (v.form.key === 'side') {
+    // lying down: the round end reads as the barrel, the staves run its length
+    rectPath(ctx, -u * 0.46, -u * 0.3, u * 0.92, u * 0.6, u * 0.16);
+    shp(ctx, w.stave, OUTLINE, u * 0.035);
+    grain(ctx, -u * 0.46, -u * 0.28, u * 0.92, u * 0.56, 5, w.dark, false);
+    ctx.beginPath();
+    ctx.moveTo(-u * 0.16, -u * 0.3); ctx.lineTo(-u * 0.16, u * 0.3);
+    ctx.moveTo(u * 0.16, -u * 0.3); ctx.lineTo(u * 0.16, u * 0.3);
+    shp(ctx, null, w.band, u * 0.05);
+    circ(ctx, u * 0.31, 0, u * 0.17); shp(ctx, w.lid, OUTLINE, u * 0.03);
+    return;
+  }
+  if (v.form.key === 'broken') {
+    // what is left standing is a jagged stump of staves with the rest fallen
+    // clear of it — evenly splayed spokes read as a sun, not as wreckage
+    const rn = rnd || (() => 0.5);
+    ctx.save(); ctx.rotate(rn(3) * Math.PI * 2);
+    for (let i = 0; i < 5; i++) {
+      const a = -0.5 + i * 0.42 + rn(i) * 0.22;
+      const len = r * (0.5 + rn(i + 5) * 0.75);
+      ctx.save(); ctx.rotate(a);
+      rectPath(ctx, -u * 0.055, -r * 0.15, u * 0.11, -len, u * 0.03);
+      shp(ctx, i % 2 ? w.stave : w.lid, OUTLINE, u * 0.022);
+      ctx.restore();
+    }
+    // the shattered base, open where the staves have gone
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.66, 0.5, Math.PI * 2 - 0.35);
+    ctx.closePath();
+    shp(ctx, w.dark, OUTLINE, u * 0.03);
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.66, 0.7, Math.PI * 1.7);
+    shp(ctx, null, w.band, u * 0.035);
+    // debris, well clear of the stump so the silhouette breaks up
+    for (let i = 0; i < 3; i++) {
+      ctx.save();
+      ctx.translate(Math.cos(rn(i + 11) * 6.3) * r * 1.15, Math.sin(rn(i + 17) * 6.3) * r * 1.15);
+      ctx.rotate(rn(i + 23) * 3);
+      rectPath(ctx, -u * 0.09, -u * 0.03, u * 0.18, u * 0.06, u * 0.02);
+      shp(ctx, w.stave, OUTLINE, u * 0.018);
+      ctx.restore();
+    }
+    ctx.restore();          // balances the rotate above: a leaked save here
+    return;                 // corrupts the transform for every later prop
+  }
+  circ(ctx, 0, 0, r); shp(ctx, w.stave, OUTLINE, u * 0.035);
+  circ(ctx, 0, 0, r * 0.8); shp(ctx, null, w.band, u * 0.045);
+  if (v.form.key === 'open') {
+    circ(ctx, 0, 0, r * 0.62); shp(ctx, w.dark, 'rgba(0,0,0,0.45)', u * 0.025);
+    circ(ctx, 0, 0, r * 0.46); shp(ctx, 'rgba(0,0,0,0.35)', null);
+  } else {
+    circ(ctx, 0, 0, r * 0.44); shp(ctx, w.lid, 'rgba(0,0,0,0.3)', u * 0.02);
+  }
 });
 
 defProp('keg', 'Keg', 'dressing', { size: 0.9, h: 0.5 }, (ctx, u) => {
@@ -178,13 +360,69 @@ defProp('keg', 'Keg', 'dressing', { size: 0.9, h: 0.5 }, (ctx, u) => {
   shp(ctx, null, METAL_M, u * 0.05);
 });
 
-defProp('crate', 'Crate', 'dressing', { size: 0.9, h: 0.6 }, (ctx, u) => {
-  const s = u * 0.72;
-  rectPath(ctx, -s / 2, -s / 2, s, s, u * 0.03); shp(ctx, WOOD_L, OUTLINE, u * 0.035);
-  ctx.beginPath();
-  ctx.moveTo(-s / 2, -s / 2); ctx.lineTo(s / 2, s / 2);
-  ctx.moveTo(s / 2, -s / 2); ctx.lineTo(-s / 2, s / 2);
-  shp(ctx, null, 'rgba(0,0,0,0.35)', u * 0.03);
+const CRATE_WOODS = [
+  { key: 'pine', label: 'Pine', board: WOOD_L, dark: WOOD_D, iron: null },
+  { key: 'oak', label: 'Oak', board: WOOD_M, dark: WOOD_D, iron: null },
+  { key: 'bound', label: 'Iron-bound', board: '#6b543a', dark: '#3a2c1c', iron: METAL_M }
+];
+const CRATE_FORMS = [
+  { key: 'shut', label: 'Nailed shut' },
+  { key: 'open', label: 'Open' },
+  { key: 'tipped', label: 'Tipped over', over: { h: 0.45 } },
+  { key: 'broken', label: 'Broken', over: { h: 0.35 } }
+];
+
+defFamily('crate', 'Crate', 'dressing', {
+  size: 0.9, h: 0.6,
+  axes: { wood: CRATE_WOODS, form: CRATE_FORMS }
+}, (ctx, u, rnd, v) => {
+  const w = v.wood, s = u * 0.72, rn = rnd || (() => 0.5);
+  if (v.form.key === 'broken') {
+    // a burst crate: the lid split and the boards sprung off one corner
+    ctx.save();
+    ctx.rotate(rn(2) * 0.6 - 0.3);
+    rectPath(ctx, -s / 2, -s / 2, s, s * 0.82, u * 0.03); shp(ctx, w.dark, OUTLINE, u * 0.03);
+    for (let i = 0; i < 4; i++) {
+      const y = -s / 2 + i * s * 0.2 + rn(i) * u * 0.03;
+      rectPath(ctx, -s / 2 + rn(i + 4) * u * 0.1, y, s * (0.6 + rn(i + 8) * 0.45), s * 0.15, u * 0.02);
+      shp(ctx, w.board, OUTLINE, u * 0.02);
+    }
+    ctx.restore();
+    for (let i = 0; i < 2; i++) {
+      ctx.save();
+      ctx.translate((rn(i + 12) - 0.5) * s * 1.7, (rn(i + 15) - 0.5) * s * 1.7);
+      ctx.rotate(rn(i + 18) * 3);
+      rectPath(ctx, -u * 0.12, -u * 0.035, u * 0.24, u * 0.07, u * 0.02);
+      shp(ctx, w.board, OUTLINE, u * 0.018);
+      ctx.restore();
+    }
+    return;
+  }
+  if (v.form.key === 'tipped') {
+    // on its side: you see the open mouth and the boards running away from you
+    rectPath(ctx, -s * 0.62, -s / 2, s * 1.24, s, u * 0.03); shp(ctx, w.board, OUTLINE, u * 0.035);
+    grain(ctx, -s * 0.62, -s / 2, s * 1.24, s, 4, 'rgba(0,0,0,0.22)', false);
+    rectPath(ctx, s * 0.16, -s * 0.42, s * 0.42, s * 0.84, u * 0.03);
+    shp(ctx, w.dark, 'rgba(0,0,0,0.45)', u * 0.025);
+    if (w.iron) { rectPath(ctx, -s * 0.6, -s * 0.46, s * 0.12, s * 0.92, u * 0.02); shp(ctx, w.iron, null); }
+    return;
+  }
+  rectPath(ctx, -s / 2, -s / 2, s, s, u * 0.03); shp(ctx, w.board, OUTLINE, u * 0.035);
+  if (v.form.key === 'open') {
+    rectPath(ctx, -s * 0.38, -s * 0.38, s * 0.76, s * 0.76, u * 0.02);
+    shp(ctx, w.dark, 'rgba(0,0,0,0.4)', u * 0.025);
+    rectPath(ctx, -s * 0.26, -s * 0.26, s * 0.52, s * 0.52, u * 0.02);
+    shp(ctx, 'rgba(0,0,0,0.3)', null);
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(-s / 2, -s / 2); ctx.lineTo(s / 2, s / 2);
+    ctx.moveTo(s / 2, -s / 2); ctx.lineTo(-s / 2, s / 2);
+    shp(ctx, null, 'rgba(0,0,0,0.35)', u * 0.03);
+  }
+  if (w.iron) {
+    rectPath(ctx, -s / 2, -s / 2, s, s, u * 0.03);
+    shp(ctx, null, w.iron, u * 0.045);
+  }
 });
 
 defProp('chest', 'Chest', 'dressing', { size: 1, h: 0.5 }, (ctx, u) => {

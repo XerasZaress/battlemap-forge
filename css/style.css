@@ -390,3 +390,15 @@ label.field.knob-off { display: none; }
 }
 .pickersearch:focus { outline: none; border-color: var(--accent-2); }
 .pickerempty { font-size: 11px; color: var(--muted); padding: 6px 2px; }
+
+/* ---------- prop variants ---------- */
+
+.variants { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 9px; }
+.variants:empty { display: none; }
+.variants > button {
+  width: 34px; height: 34px; padding: 0; flex: none;
+  background: var(--panel-2); border: 2px solid transparent; border-radius: 4px;
+}
+.variants > button:hover { border-color: #4a5266; }
+.variants > button.active { border-color: var(--accent); }
+.variants > button canvas { display: block; width: 30px; height: 30px; }

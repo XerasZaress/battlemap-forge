@@ -28,10 +28,16 @@ class Placer {
   }
   /** Place a prop at grid cell (x,y) if the terrain and space allow. */
   place(key, x, y, opts) {
-    const def = PROPS[key]; if (!def) return false;
+    const fam = PROPS[key]; if (!fam) return false;
     if (!this.map.inBounds(x, y)) return false;
-    if (!this.isFree(x, y, def.size)) return false;
     const o = Object.assign({}, opts);
+    // A family's whole point is that the generator can vary it: a cellar of
+    // twelve identical barrels is what having forms is meant to prevent. The
+    // form has to be chosen before the space check, because members are not
+    // all the same size — a bench must not fit where a stool would.
+    if (o.vi === undefined && fam.variants) o.vi = this.rng.int(0, fam.variants.length - 1);
+    const def = propDefFor(fam, o.vi);
+    if (!this.isFree(x, y, def.size)) return false;
     if (o.rot === undefined) o.rot = propRotation(def, this.rng);
     if (o.scale === undefined) o.scale = def.rand === false ? 1 : this.rng.range(def.snap ? 0.95 : 0.85, def.snap ? 1.05 : 1.12);
     this.map.addProp(key, x + 0.5, y + 0.5, o);
@@ -278,7 +284,7 @@ defGen('dungeon', 'Stone Dungeon', 'Interior', (map, rng, cfg) => {
   if (rooms.length) { const r = rng.pick(big.length ? big : rooms); p.place(feature, r.cx, r.cy); }
 
   const n = clutter(cfg, rooms.length * 3);
-  p.scatter(['barrel', 'crate', 'chest', 'sack', 'pot', 'crates_stack', 'bookshelf', 'table_long', 'table_round', 'chair', 'weapon_rack', 'anvil', 'cage', 'bed'],
+  p.scatter(['barrel', 'crate', 'chest', 'sack', 'pot', 'crates_stack', 'bookshelf', 'table', 'seat', 'weapon_rack', 'anvil', 'cage', 'bed'],
     n, t => t === T.STONE);
   p.scatter(['bones', 'skull', 'rubble_pile', 'spiderweb', 'mushroom'], Math.round(n * 0.7), t => t === T.STONE || t === T.RUBBLE);
   p.scatter(['brazier', 'torch'], clutter(cfg, 7), (t, x, y) =>
@@ -474,11 +480,14 @@ defGen('tavern', 'Tavern / Interior', 'Interior', (map, rng, cfg) => {
   for (let i = 0; i < wantTables * 25 && seated < wantTables; i++) {
     const tx = rng.int(x0 + 2, x1 - 2), ty = rng.int(y0 + 2, y1 - 2);
     if (inRoom(tx, ty) || map.get(tx, ty) !== T.WOOD) continue;
-    const kind = rng.chance(0.55) ? 'table_round' : 'table_long';
-    if (!p.place(kind, tx, ty)) continue;
+    // the room wants a shape; the wood it is made of can vary table to table
+    const form = rng.chance(0.55) ? 'round' : 'long';
+    if (!p.place('table', tx, ty, { vi: familyPick('table', { form }, rng) })) continue;
     seated++;
     for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]])
-      if (rng.chance(0.5)) p.place(rng.chance(0.5) ? 'chair' : 'stool', tx + ox, ty + oy);
+      if (rng.chance(0.5))
+        p.place('seat', tx + ox, ty + oy,
+          { vi: familyPick('seat', { form: rng.chance(0.5) ? 'chair' : 'stool' }, rng) });
     if (rng.chance(0.4)) p.place('candles', tx, ty);
   }
   p.scatter(['barrel', 'keg', 'crate', 'sack', 'crates_stack', 'bed', 'bookshelf', 'desk', 'chest', 'cauldron'],
@@ -567,7 +576,7 @@ defGen('town', 'Town / Village', 'Settlement', (map, rng, cfg) => {
   const p = new Placer(map, rng);
   const inside = (x, y) => buildings.some(b => x >= b.x && x <= b.x1 && y >= b.y && y <= b.y1);
   for (const b of buildings) {
-    p.scatter(['table_round', 'chair', 'bed', 'chest', 'barrel', 'bookshelf', 'desk', 'stool'],
+    p.scatter(['table', 'seat', 'bed', 'chest', 'barrel', 'bookshelf', 'desk'],
       clutter(cfg, 4),
       (t, x, y) => t === T.WOOD && x >= b.x && x <= b.x1 && y >= b.y && y <= b.y1);
   }
@@ -936,7 +945,7 @@ defGen('ship', 'Ship Deck', 'Structure', (map, rng, cfg) => {
   const [lx, ly] = cellOf(Math.round(bow + (stern - bow) * 0.47), Math.round(centre) + 1);
   p.place('ladder', lx, ly);
 
-  p.scatter(['table_round', 'chair', 'bed', 'desk', 'chest', 'lantern'], clutter(cfg, 5.5),
+  p.scatter(['table', 'seat', 'bed', 'desk', 'chest', 'lantern'], clutter(cfg, 5.5),
     (t, x, y) => t === T.WOOD && inCabin(x, y));
   p.scatter(['barrel', 'crate', 'crates_stack', 'sack', 'keg', 'anchor', 'cage', 'weapon_rack'],
     clutter(cfg, 12), (t, x, y) => t === T.WOOD && !inCabin(x, y));
