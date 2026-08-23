@@ -257,6 +257,18 @@ button.danger:hover { background: #4a221c; border-color: var(--danger); color: #
 }
 #busy.on { display: flex; }
 
+/* hover labels for the icon rails and the prop grid */
+.tooltip {
+  position: fixed; left: 0; top: 0; z-index: 300;
+  max-width: 220px; padding: 5px 9px;
+  background: #232733; border: 1px solid var(--line);
+  border-radius: 5px; box-shadow: 0 6px 18px rgba(0, 0, 0, .5);
+  color: var(--text); font-size: 12px; line-height: 1.35;
+  white-space: nowrap; pointer-events: none;
+  opacity: 0; visibility: hidden; transition: opacity .12s;
+}
+.tooltip.show { opacity: 1; visibility: visible; }
+
 .toast {
   position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
   background: #232733; border: 1px solid var(--accent); color: var(--text);
