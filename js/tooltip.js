@@ -40,8 +40,11 @@ function showTip(target) {
      when the window edge is nearer than the label is wide — the right rail
      always flips. Grid cells sit shoulder to shoulder, so a label beside one
      would cover its neighbour; those get it underneath instead. */
+  /* offsetWidth/Height, not the bounding rect: the tooltip scales up as it
+     fades in, and a rect measured mid-transition would place it a pixel or
+     two off. */
   const r = target.getBoundingClientRect();
-  const t = tip.getBoundingClientRect();
+  const t = { width: tip.offsetWidth, height: tip.offsetHeight };
   const gap = 8;
   let x, y;
   if (target.closest('.rail')) {

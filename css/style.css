@@ -1,14 +1,72 @@
+/* Battlemap Forge — interface chrome.
+
+   The map is the artwork; everything around it is a workbench and should
+   recede. So the chrome is a cool, near-monochrome grey and the one warm
+   colour — forge gold — is spent only on what is active or actionable.
+   Every value below comes from a scale. Nothing is eyeballed. */
+
 :root {
-  --bg: #14161c;
-  --panel: #1c1f27;
-  --panel-2: #232733;
-  --line: #333947;
-  --text: #dfe3ec;
-  --muted: #8f97a8;
-  --accent: #c9a227;
-  --accent-2: #7fb3d5;
-  --danger: #d0563f;
-  --radius: 6px;
+  /* Surfaces climb toward the viewer. In a dark interface depth reads as
+     light, not as shadow, so each step up is a lighter grey rather than a
+     bigger drop shadow. */
+  --bg:        #0f1116;
+  --surface-0: #14171e;
+  --surface-1: #1a1e26;
+  --surface-2: #212630;
+  --surface-3: #2a303c;
+  --surface-4: #343b4a;
+
+  /* Hairlines are translucent white, so an edge looks like light catching it
+     rather than a grey line drawn on top. */
+  --line:        rgba(255, 255, 255, .07);
+  --line-strong: rgba(255, 255, 255, .13);
+  --bevel:       rgba(255, 255, 255, .06);
+
+  --text:  #e4e7ef;
+  --muted: #949cb0;
+
+  --accent:      #c9a227;
+  --accent-hi:   #e2ba3c;
+  --accent-lo:   #8a6f14;
+  --accent-dim:  rgba(201, 162, 39, .40);
+  --accent-wash: rgba(201, 162, 39, .10);
+  --accent-ink:  #17130a;
+  --accent-2:    #7fb3d5;
+
+  --danger:      #d0563f;
+  --danger-hi:   #e79383;
+  --danger-wash: rgba(208, 86, 63, .16);
+
+  /* 4/8 grid. A dense tool lives in the low end of it. */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px;
+
+  /* Six sizes, no more: overlay caption, label, control, body, icon, mark. */
+  --fs-micro: 9px;
+  --fs-xs:   11px;
+  --fs-sm:   12px;
+  --fs-md:   13px;
+  --fs-lg:   15px;
+  --fs-xl:   17px;
+
+  /* A child's corner is always tighter than its parent's. */
+  --r-xs:  3px;
+  --r-sm:  5px;
+  --r-md:  7px;
+  --r-lg: 10px;
+  --radius: var(--r-md);
+
+  --sh-1: 0 1px 2px rgba(0, 0, 0, .40);
+  --sh-2: 0 4px 14px rgba(0, 0, 0, .45);
+  --sh-3: 0 14px 38px rgba(0, 0, 0, .55);
+
+  /* Enters fast and lands gently. */
+  --ease: cubic-bezier(.2, .8, .3, 1);
+  --t-fast: 110ms;
+  --t-mid: 180ms;
+
+  /* Barely-there grain. Large flat fills read as plastic without it; at 3%
+     you cannot see it directly, only notice its absence. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23g)' opacity='.03'/%3E%3C/svg%3E");
 }
 
 * { box-sizing: border-box; }
@@ -16,49 +74,85 @@
 html, body {
   margin: 0; padding: 0; height: 100%;
   background: var(--bg); color: var(--text);
-  font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font: var(--fs-md)/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
 #app { display: flex; height: 100vh; width: 100vw; }
 
-/* ---------- panels ---------- */
+/* One focus ring for the whole app, in the cool secondary so it never reads
+   as "selected" — gold already means that. */
+:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
 
 /* ---------- icon rails ---------- */
 
 .rail {
-  width: 46px; flex: none; background: #171a21;
+  width: 46px; flex: none;
+  background: var(--grain), var(--surface-0);
   border-right: 1px solid var(--line);
   display: flex; flex-direction: column; align-items: center;
-  gap: 3px; padding: 6px 0; overflow-y: auto; z-index: 6;
+  gap: var(--s1); padding: var(--s2) 0; overflow-y: auto; z-index: 6;
 }
 .rail.right { border-right: none; border-left: 1px solid var(--line); }
-.rail > button {
+
+.rail > button,
+.railtools button {
+  position: relative;
   width: 34px; height: 34px; flex: none; padding: 0;
-  font-size: 15px; line-height: 1; color: var(--muted);
-  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  font-size: var(--fs-lg); line-height: 1; color: var(--muted);
+  background: transparent; border: 1px solid transparent;
+  border-radius: var(--r-md); box-shadow: none;
+  transition: background var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease);
 }
-.rail > button:hover { background: #262b36; color: var(--text); border-color: #3a4152; }
-.rail > button.open { background: #33384a; color: var(--accent); border-color: var(--accent); }
+.rail > button:hover,
+.railtools button:hover {
+  background: var(--surface-2); color: var(--text); border-color: var(--line-strong);
+  box-shadow: inset 0 1px 0 var(--bevel);
+}
+
+/* The chosen tool is the single most important piece of state on screen, so
+   it gets all three signals at once: it lifts, it goes gold, and a tab on the
+   rail's outer edge points at it. */
+.rail > button.open,
+.railtools button.active {
+  background: var(--surface-3); color: var(--accent);
+  border-color: var(--accent-dim);
+  box-shadow: inset 0 1px 0 var(--bevel), 0 0 0 3px var(--accent-wash);
+}
+.rail > button.open::after,
+.railtools button.active::after {
+  content: ""; position: absolute; top: 7px; bottom: 7px; width: 3px;
+  border-radius: 0 3px 3px 0; background: var(--accent);
+  left: -6px;
+}
+.rail.right > button.open::after,
+.rail.right .railtools button.active::after {
+  left: auto; right: -6px; border-radius: 3px 0 0 3px;
+}
+
 .raillogo {
   width: 34px; height: 30px; display: grid; place-items: center;
-  color: var(--accent); font-size: 16px; margin-bottom: 4px;
+  color: var(--accent); font-size: var(--fs-xl); margin-bottom: var(--s1);
+  text-shadow: 0 0 14px var(--accent-dim);
 }
-.raildiv { width: 26px; height: 1px; background: var(--line); margin: 5px 0; flex: none; }
+.raildiv {
+  width: 22px; height: 1px; background: var(--line-strong);
+  margin: var(--s2) 0; flex: none;
+}
 
-.railtools { display: flex; flex-direction: column; gap: 3px; align-items: center; }
-.railtools button {
-  width: 34px; height: 34px; padding: 0; font-size: 15px; line-height: 1;
-  color: var(--muted); background: transparent;
-  border: 1px solid transparent; border-radius: 6px;
-}
-.railtools button:hover { background: #262b36; color: var(--text); border-color: #3a4152; }
-.railtools button.active {
-  background: #33384a; border-color: var(--accent); color: var(--text);
-}
+.railtools { display: flex; flex-direction: column; gap: var(--s1); align-items: center; }
+
+/* ---------- panels ---------- */
 
 .panel {
-  width: 288px; flex: none; background: var(--panel);
+  width: 288px; flex: none;
+  background: var(--grain), var(--surface-1);
   border-right: 1px solid var(--line);
   display: flex; flex-direction: column;
   overflow-y: auto; overflow-x: hidden;
@@ -70,232 +164,403 @@ html, body {
 .panel section.group.showing { display: block; }
 
 .brand {
-  padding: 14px 14px 12px; border-bottom: 1px solid var(--line);
-  position: sticky; top: 0; background: var(--panel); z-index: 5;
+  padding: var(--s4) var(--s4) var(--s3); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; background: var(--surface-1); z-index: 5;
 }
 .brand h1 {
-  margin: 0; font-size: 15px; letter-spacing: .08em; text-transform: uppercase;
+  margin: 0; font-size: var(--fs-lg); letter-spacing: .10em; text-transform: uppercase;
   font-weight: 600; color: var(--accent);
 }
-.brand p { margin: 3px 0 0; font-size: 11px; color: var(--muted); }
+.brand p { margin: var(--s1) 0 0; font-size: var(--fs-xs); color: var(--muted); }
 
-section.group { border-bottom: 1px solid var(--line); padding: 12px 14px 14px; }
-section.group > h2 {
-  margin: 0 0 10px; font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
-  color: var(--muted); font-weight: 600; display: flex; align-items: center; justify-content: space-between;
+section.group {
+  border-bottom: 1px solid var(--line);
+  padding: var(--s3) var(--s4) var(--s4);
 }
-section.group > h2 .chev { color: var(--muted); font-size: 10px; opacity: .7; }
+section.group > h2 {
+  margin: 0 0 var(--s3); font-size: var(--fs-xs); letter-spacing: .10em;
+  text-transform: uppercase; color: var(--muted); font-weight: 600;
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; user-select: none;
+}
+section.group > h2 .chev {
+  color: var(--muted); font-size: var(--fs-xs); opacity: .6;
+  transition: opacity var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
 section.group > h2:hover .chev { opacity: 1; color: var(--text); }
-section.group > h2 { cursor: pointer; user-select: none; }
 
-label.field { display: block; margin-bottom: 9px; }
+/* ---------- fields ---------- */
+
+label.field { display: block; margin-bottom: var(--s3); }
 label.field > span {
   display: flex; justify-content: space-between; align-items: baseline;
-  font-size: 11px; color: var(--muted); margin-bottom: 3px;
+  font-size: var(--fs-xs); color: var(--muted); margin-bottom: var(--s1);
 }
 label.field > span b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
 
 input[type=text], input[type=number], select, textarea {
-  width: 100%; background: var(--panel-2); color: var(--text);
-  border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 6px 8px; font: inherit; font-size: 12px;
+  width: 100%; height: 30px;
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--line-strong); border-radius: var(--r-sm);
+  padding: 0 var(--s2); font: inherit; font-size: var(--fs-sm);
+  /* recessed, so an input never looks like a button */
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .28);
+  transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
-input[type=text]:focus, input[type=number]:focus, select:focus {
+textarea { height: auto; padding: var(--s2); }
+input[type=text]:hover, input[type=number]:hover, select:hover { border-color: rgba(255, 255, 255, .2); }
+input[type=text]:focus, input[type=number]:focus, select:focus, textarea:focus {
   outline: none; border-color: var(--accent-2);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .28), 0 0 0 3px rgba(127, 179, 213, .18);
 }
-input[type=range] { width: 100%; accent-color: var(--accent); margin: 2px 0 0; }
-input[type=color] {
-  width: 100%; height: 26px; padding: 0; border: 1px solid var(--line);
-  border-radius: var(--radius); background: var(--panel-2);
-}
-input[type=checkbox] { accent-color: var(--accent); margin-right: 6px; vertical-align: -2px; }
 
-.row { display: flex; gap: 8px; }
+/* The native arrow is the one control that cannot be themed, so it is
+   replaced rather than left to clash. */
+select {
+  appearance: none; -webkit-appearance: none;
+  padding-right: var(--s5);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23949cb0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--s3) center;
+}
+
+/* Sliders are the main way a map gets tuned, so they get a real track, a
+   filled portion showing where the value sits, and a thumb that answers the
+   pointer. --fill is written by js/rangefill.js. */
+input[type=range] {
+  appearance: none; -webkit-appearance: none;
+  width: 100%; height: 18px; margin: 0; background: transparent; cursor: pointer;
+}
+input[type=range]::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 999px;
+  background:
+    linear-gradient(90deg, var(--accent-lo), var(--accent)) 0 / var(--fill, 50%) 100% no-repeat,
+    var(--surface-3);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .45);
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px; margin-top: -5px; border-radius: 50%;
+  background: linear-gradient(180deg, var(--accent-hi), var(--accent));
+  border: 1px solid var(--accent-lo);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .35);
+  transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+input[type=range]:hover::-webkit-slider-thumb { transform: scale(1.15); }
+input[type=range]:active::-webkit-slider-thumb {
+  transform: scale(1.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .5), 0 0 0 5px var(--accent-wash);
+}
+input[type=range]::-moz-range-track {
+  height: 4px; border-radius: 999px; background: var(--surface-3);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .45);
+}
+input[type=range]::-moz-range-progress {
+  height: 4px; border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-lo), var(--accent));
+}
+input[type=range]::-moz-range-thumb {
+  width: 13px; height: 13px; border-radius: 50%; border: 1px solid var(--accent-lo);
+  background: linear-gradient(180deg, var(--accent-hi), var(--accent));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .5);
+}
+
+input[type=color] {
+  width: 100%; height: 30px; padding: 0; border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm); background: var(--surface-2); cursor: pointer;
+}
+input[type=checkbox] { accent-color: var(--accent); margin-right: var(--s2); vertical-align: -2px; }
+
+.row { display: flex; gap: var(--s2); }
 .row > * { flex: 1; min-width: 0; }
 
-.check { display: block; font-size: 12px; margin-bottom: 7px; cursor: pointer; }
-.hint { font-size: 11px; color: var(--muted); margin: 6px 0 0; line-height: 1.4; }
+.check {
+  display: block; font-size: var(--fs-sm); margin-bottom: var(--s2);
+  cursor: pointer; color: var(--text);
+}
+.hint { font-size: var(--fs-xs); color: var(--muted); margin: var(--s2) 0 0; line-height: 1.45; }
 
+/* ---------- buttons ---------- */
+
+/* Every button carries a 1px top highlight and a faint top-down gradient, so
+   it catches light from above like a physical key. Heights come from one
+   scale (24 / 30) shared with the inputs above. */
 button, .btn {
-  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 7px 10px; font: inherit; font-size: 12px;
+  height: 30px;
+  background: linear-gradient(180deg, #262c37, #1e232c);
+  color: var(--text); border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm); padding: 0 var(--s3);
+  font: inherit; font-size: var(--fs-sm);
   cursor: pointer; text-align: center; white-space: nowrap;
+  box-shadow: inset 0 1px 0 var(--bevel), var(--sh-1);
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              transform var(--t-fast) var(--ease),
+              box-shadow var(--t-fast) var(--ease);
 }
-button:hover, .btn:hover { background: #2c313e; border-color: #454c5d; }
-button:active { transform: translateY(1px); }
-button.primary {
-  background: linear-gradient(180deg, #d5ae32, #b18d1c); border-color: #8a6f14;
-  color: #1a1608; font-weight: 600;
+button:hover, .btn:hover {
+  background: linear-gradient(180deg, #303744, #262c37);
+  border-color: rgba(255, 255, 255, .2);
 }
-button.primary:hover { background: linear-gradient(180deg, #e0ba3e, #c09b24); }
-button.wide { width: 100%; }
-button.sm { padding: 5px 7px; font-size: 11px; }
-button:disabled { opacity: .45; cursor: not-allowed; }
+button:active { transform: translateY(1px); box-shadow: inset 0 1px 3px rgba(0, 0, 0, .4); }
 
-.stack { display: flex; flex-direction: column; gap: 7px; }
+button.primary {
+  background: linear-gradient(180deg, var(--accent-hi), #b18d1c);
+  border-color: var(--accent-lo); color: var(--accent-ink); font-weight: 600;
+  /* the shadow is tinted with the button's own colour, so the glow belongs
+     to the gold rather than sitting under it as grey haze */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 2px 12px rgba(201, 162, 39, .28);
+}
+button.primary:hover {
+  background: linear-gradient(180deg, #eec44a, #c09b24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 3px 18px rgba(201, 162, 39, .4);
+}
+button.wide { width: 100%; }
+button.sm { height: 24px; padding: 0 var(--s2); font-size: var(--fs-xs); }
+button:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
+button:disabled:hover { background: linear-gradient(180deg, #262c37, #1e232c); }
+
+button.danger { border-color: rgba(208, 86, 63, .45); color: var(--danger-hi); }
+button.danger:hover {
+  background: var(--danger-wash); border-color: var(--danger); color: #fff;
+}
+
+.stack { display: flex; flex-direction: column; gap: var(--s2); }
 
 /* ---------- tool grid ---------- */
 
-.toolgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.toolgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); }
 .toolgrid button {
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 8px 4px; font-size: 10px; color: var(--muted);
+  height: auto;
+  display: flex; flex-direction: column; align-items: center; gap: var(--s1);
+  padding: var(--s2) var(--s1); font-size: var(--fs-micro); color: var(--muted);
+  letter-spacing: .02em;
 }
-.toolgrid button .ico { font-size: 15px; line-height: 1; }
+.toolgrid button .ico { font-size: var(--fs-lg); line-height: 1; }
 .toolgrid button.active {
-  background: #33384a; border-color: var(--accent); color: var(--text);
+  background: var(--surface-3); border-color: var(--accent-dim); color: var(--text);
+  box-shadow: inset 0 1px 0 var(--bevel), 0 0 0 3px var(--accent-wash);
 }
 
 /* ---------- palettes ---------- */
 
-.swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s2); }
 .swatch {
-  position: relative; aspect-ratio: 1; border-radius: var(--radius);
+  position: relative; aspect-ratio: 1; border-radius: var(--r-sm);
   border: 2px solid transparent; cursor: pointer; overflow: hidden;
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,.5);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .55), var(--sh-1);
+  transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
-.swatch.active { border-color: var(--accent); }
+.swatch:hover { transform: translateY(-1px); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .55), var(--sh-2); }
+.swatch.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .55), 0 0 0 3px var(--accent-wash);
+}
 .swatch span {
-  position: absolute; inset: auto 0 0 0; font-size: 8px; text-align: center;
-  background: rgba(0,0,0,.6); color: #fff; padding: 1px 0;
+  position: absolute; inset: auto 0 0 0; font-size: var(--fs-micro); text-align: center;
+  background: linear-gradient(180deg, rgba(0, 0, 0, .1), rgba(0, 0, 0, .78));
+  color: #fff; padding: 3px 2px 2px; letter-spacing: .01em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-.roomgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
-.roomcell {
-  background: var(--panel-2); border: 2px solid transparent; border-radius: var(--radius);
-  cursor: pointer; padding: 3px; display: block; text-align: center;
+/* Cells in the three pickers share one anatomy, so learning one teaches the
+   others: recessed tile, gold ring when chosen, lift on hover. */
+.roomgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--s2); }
+.roomcell, .propcell, .pelibcell {
+  background: var(--surface-2); border: 2px solid transparent;
+  border-radius: var(--r-md); cursor: pointer;
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              transform var(--t-fast) var(--ease),
+              box-shadow var(--t-fast) var(--ease);
 }
-.roomcell.active { border-color: var(--accent); background: #33384a; }
-.roomcell canvas { width: 100%; height: auto; display: block; border-radius: 3px; }
+.roomcell:hover, .propcell:hover, .pelibcell:hover {
+  background: var(--surface-3); transform: translateY(-1px); box-shadow: var(--sh-2);
+}
+.roomcell.active, .propcell.active {
+  border-color: var(--accent); background: var(--surface-3);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+.roomcell { padding: var(--s1); display: block; text-align: center; }
+.roomcell canvas { width: 100%; height: auto; display: block; border-radius: var(--r-xs); }
 .roomcell span {
-  display: block; font-size: 9px; color: var(--muted); margin-top: 3px;
+  display: block; font-size: var(--fs-micro); color: var(--muted); margin-top: var(--s1);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .roomcell.active span { color: var(--text); }
 
-.propgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
-.propcell {
-  aspect-ratio: 1; background: var(--panel-2); border: 2px solid transparent;
-  border-radius: var(--radius); cursor: pointer; display: block; padding: 2px;
-}
-.propcell.active { border-color: var(--accent); background: #33384a; }
-.propcell canvas { width: 100%; height: 100%; display: block; }
+.propgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s2); }
+.propcell { aspect-ratio: 1; display: block; padding: 2px; }
+.propcell canvas { width: 100%; height: 100%; display: block; border-radius: var(--r-xs); }
 
-.transform.editing {
-  background: #23283a; border: 1px solid var(--accent);
-  border-radius: var(--radius); padding: 9px; margin: -2px -3px 0;
-}
-/* contextual toolbar that follows the selection on the canvas */
-.floatbar {
-  position: absolute; display: none; gap: 4px; z-index: 5;
-  background: rgba(24, 27, 34, .95); border: 1px solid var(--line);
-  border-radius: 8px; padding: 4px; backdrop-filter: blur(6px);
-  box-shadow: 0 6px 22px rgba(0, 0, 0, .55);
-}
-.floatbar.on { display: flex; }
-.floatbar button {
-  width: 30px; height: 28px; padding: 0; font-size: 14px; line-height: 1;
-  background: transparent; border: 1px solid transparent; color: var(--text);
-}
-.floatbar button:hover { background: #333a4a; border-color: #454c5d; }
-.floatbar button.danger { color: #e79383; }
-.floatbar button.danger:hover { background: #4a221c; border-color: var(--danger); color: #fff; }
+/* ---------- selection panels ---------- */
 
-.roomsel {
-  display: none; margin-top: 10px; padding: 9px;
-  background: #23283a; border: 1px solid var(--accent); border-radius: var(--radius);
+.transform.editing, .roomsel {
+  background: var(--surface-2); border: 1px solid var(--accent-dim);
+  border-radius: var(--r-md); padding: var(--s3);
+  box-shadow: inset 0 1px 0 var(--bevel), 0 0 0 3px var(--accent-wash);
 }
+.transform.editing { margin: calc(var(--s1) * -1) -3px 0; }
+.roomsel { display: none; margin-top: var(--s3); }
 .roomsel.on { display: block; }
 .roomsel .tformhead { color: var(--accent); }
-button.danger { border-color: #6b3128; color: #e79383; }
-button.danger:hover { background: #4a221c; border-color: var(--danger); color: #fff; }
 
 .tformhead {
   display: flex; justify-content: space-between; align-items: center;
-  font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--muted); margin-bottom: 8px;
+  font-size: var(--fs-xs); letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: var(--s2);
 }
 .transform.editing .tformhead { color: var(--accent); }
+
 #propPreview {
-  width: 100%; height: auto; aspect-ratio: 1; display: block; margin-bottom: 9px;
-  background: #2b3040;
-  border: 1px solid var(--line); border-radius: var(--radius);
+  width: 100%; height: auto; aspect-ratio: 1; display: block; margin-bottom: var(--s3);
+  background: radial-gradient(circle at 50% 40%, #333b4c, #22262f);
+  border: 1px solid var(--line-strong); border-radius: var(--r-md);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .35);
 }
 
-.tabs { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
-.tabs button { padding: 4px 7px; font-size: 11px; color: var(--muted); }
-.tabs button.active { color: var(--text); border-color: var(--accent); background: #2c313e; }
+.tabs { display: flex; gap: var(--s1); margin-bottom: var(--s3); flex-wrap: wrap; }
+.tabs button {
+  height: 24px; padding: 0 var(--s2); font-size: var(--fs-xs); color: var(--muted);
+  background: transparent; border-color: transparent; box-shadow: none;
+}
+.tabs button:hover { background: var(--surface-2); border-color: var(--line-strong); }
+/* Selected, not primary: a filled gold pill here would compete with the one
+   real call to action in the panel. Same language as the rails and the tool
+   grid — raised surface, gold rim, gold wash. */
+.tabs button.active {
+  color: var(--text); background: var(--surface-3);
+  border-color: var(--accent-dim); font-weight: 600;
+  box-shadow: inset 0 1px 0 var(--bevel), 0 0 0 3px var(--accent-wash);
+}
 
 /* ---------- canvas stage ---------- */
 
-#stage { flex: 1; position: relative; overflow: hidden; background: #0d0f14; min-width: 0; }
+/* A soft well behind the map: the corners fall away so the artwork reads as
+   lit from the middle rather than pasted on a flat rectangle. */
+#stage {
+  flex: 1; position: relative; overflow: hidden; min-width: 0;
+  background: radial-gradient(ellipse 80% 80% at 50% 45%, #151922 0%, #0b0d12 100%);
+}
 #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
 #stage.panning #view { cursor: grabbing; }
 
-#topbar {
-  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 6px; align-items: center; z-index: 4;
-  background: rgba(24,27,34,.92); border: 1px solid var(--line);
-  border-radius: 8px; padding: 6px 8px; backdrop-filter: blur(6px);
-  box-shadow: 0 4px 18px rgba(0,0,0,.45);
+/* Everything that floats over the map shares one material: blurred dark
+   glass, a lit top edge, and the same corner. */
+#topbar, .floatbar, #statusbar, .toast, .tooltip, .pestatus, .petoast {
+  background: rgba(22, 26, 33, .82);
+  border: 1px solid var(--line-strong);
+  box-shadow: inset 0 1px 0 var(--bevel), var(--sh-2);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
 }
-#topbar .sep { width: 1px; height: 20px; background: var(--line); margin: 0 2px; }
-#topbar .zoomval { font-size: 11px; color: var(--muted); min-width: 42px; text-align: center; }
+
+#topbar {
+  position: absolute; top: var(--s3); left: 50%; transform: translateX(-50%);
+  display: flex; gap: var(--s1); align-items: center; z-index: 4;
+  border-radius: var(--r-lg); padding: var(--s1) var(--s2);
+}
+#topbar button { background: transparent; border-color: transparent; box-shadow: none; }
+#topbar button:hover { background: var(--surface-3); border-color: var(--line-strong); }
+#topbar button.primary {
+  background: linear-gradient(180deg, var(--accent-hi), #b18d1c);
+  border-color: var(--accent-lo);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 2px 12px rgba(201, 162, 39, .28);
+}
+#topbar .sep { width: 1px; height: 18px; background: var(--line-strong); margin: 0 var(--s1); }
+#topbar .zoomval {
+  font-size: var(--fs-xs); color: var(--muted); min-width: 44px; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 
 #statusbar {
-  position: absolute; bottom: 10px; left: 12px; z-index: 4;
-  background: rgba(24,27,34,.9); border: 1px solid var(--line);
-  border-radius: 6px; padding: 5px 9px; font-size: 11px; color: var(--muted);
+  position: absolute; bottom: var(--s3); left: var(--s3); z-index: 4;
+  border-radius: var(--r-md); padding: var(--s1) var(--s2);
+  font-size: var(--fs-xs); color: var(--muted);
   font-variant-numeric: tabular-nums; pointer-events: none;
 }
 
+/* contextual toolbar that follows the selection on the canvas */
+.floatbar {
+  position: absolute; display: none; gap: 2px; z-index: 5;
+  border-radius: var(--r-lg); padding: var(--s1);
+}
+.floatbar.on { display: flex; }
+.floatbar button {
+  width: 28px; height: 28px; padding: 0; font-size: var(--fs-md); line-height: 1;
+  background: transparent; border: 1px solid transparent; color: var(--text);
+  border-radius: var(--r-sm); box-shadow: none;
+}
+.floatbar button:hover { background: var(--surface-3); border-color: var(--line-strong); }
+.floatbar button.danger { color: var(--danger-hi); border-color: transparent; }
+.floatbar button.danger:hover { background: var(--danger-wash); border-color: var(--danger); color: #fff; }
+
 #busy {
   position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
-  background: rgba(10,12,18,.55); z-index: 6; font-size: 13px; color: var(--accent);
-  letter-spacing: .08em; text-transform: uppercase;
+  background: rgba(10, 12, 18, .6); z-index: 6; font-size: var(--fs-md); color: var(--accent);
+  letter-spacing: .12em; text-transform: uppercase;
+  backdrop-filter: blur(2px);
 }
 #busy.on { display: flex; }
 
 /* hover labels for the icon rails and the prop grid */
 .tooltip {
   position: fixed; left: 0; top: 0; z-index: 300;
-  max-width: 220px; padding: 5px 9px;
-  background: #232733; border: 1px solid var(--line);
-  border-radius: 5px; box-shadow: 0 6px 18px rgba(0, 0, 0, .5);
-  color: var(--text); font-size: 12px; line-height: 1.35;
+  max-width: 220px; padding: var(--s1) var(--s2);
+  border-radius: var(--r-sm);
+  color: var(--text); font-size: var(--fs-sm); line-height: 1.35;
   white-space: nowrap; pointer-events: none;
-  opacity: 0; visibility: hidden; transition: opacity .12s;
+  opacity: 0; visibility: hidden;
+  transform: scale(.96);
+  transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease), visibility var(--t-fast);
 }
-.tooltip.show { opacity: 1; visibility: visible; }
+.tooltip.show { opacity: 1; visibility: visible; transform: scale(1); }
 
 .toast {
-  position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
-  background: #232733; border: 1px solid var(--accent); color: var(--text);
-  padding: 8px 14px; border-radius: 6px; font-size: 12px; z-index: 8;
-  opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none;
-  max-width: 70%; text-align: center;
+  position: absolute; bottom: var(--s4); left: 50%; transform: translateX(-50%);
+  border-color: var(--accent-dim); color: var(--text);
+  padding: var(--s2) var(--s4); border-radius: var(--r-md); font-size: var(--fs-sm);
+  z-index: 8;
+  opacity: 0; transition: opacity var(--t-mid), transform var(--t-mid) var(--ease);
+  pointer-events: none; max-width: 70%; text-align: center;
 }
-.toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
 
 kbd {
-  background: var(--panel-2); border: 1px solid var(--line); border-bottom-width: 2px;
-  border-radius: 3px; padding: 0 4px; font-size: 10px; font-family: ui-monospace, monospace;
+  background: var(--surface-2); border: 1px solid var(--line-strong); border-bottom-width: 2px;
+  border-radius: var(--r-xs); padding: 1px 5px; font-size: var(--fs-xs);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text);
+}
+button.primary kbd {
+  background: rgba(0, 0, 0, .16); border-color: rgba(0, 0, 0, .22);
+  color: var(--accent-ink);
 }
 
 .knobName { font-style: normal; }
 label.field.knob-off { display: none; }
 
-.divider { height: 1px; background: var(--line); margin: 10px 0; }
+.divider { height: 1px; background: var(--line); margin: var(--s3) 0; }
 
-::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #333947; border-radius: 5px; }
-::-webkit-scrollbar-thumb:hover { background: #454c5d; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, .11); border-radius: 999px;
+  border: 3px solid transparent; background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, .22); background-clip: content-box; }
 
 @media (max-width: 1100px) {
   .panel { width: 240px; }
   .panel.right { width: 224px; }
+}
+
+/* Motion here is feedback, never decoration — when it is unwelcome the
+   interface still works, it just stops moving. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+  }
 }
 
 /* ---------- prop editor ---------- */
@@ -307,110 +572,128 @@ label.field.knob-off { display: none; }
 #propEditor.on { display: flex; }
 
 .pehead {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel);
+  display: flex; align-items: center; gap: var(--s2);
+  padding: var(--s2) var(--s3); border-bottom: 1px solid var(--line);
+  background: var(--grain), var(--surface-1);
 }
-.pehead strong { color: var(--accent); letter-spacing: .06em; text-transform: uppercase; font-size: 13px; }
-.pehint { font-size: 11px; color: var(--muted); font-style: normal; }
+.pehead strong {
+  color: var(--accent); letter-spacing: .08em; text-transform: uppercase; font-size: var(--fs-md);
+}
+.pehint { font-size: var(--fs-xs); color: var(--muted); font-style: normal; }
 
 .pebody { flex: 1; display: flex; min-height: 0; }
 .pecol {
-  width: 250px; flex: none; background: var(--panel); overflow-y: auto;
-  border-right: 1px solid var(--line); padding: 10px;
+  width: 250px; flex: none; background: var(--grain), var(--surface-1); overflow-y: auto;
+  border-right: 1px solid var(--line); padding: var(--s3);
 }
 .pecol.right { border-right: none; border-left: 1px solid var(--line); width: 274px; }
 
-.pesection { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
+.pesection { border-top: 1px solid var(--line); padding-top: var(--s3); margin-top: var(--s3); }
 .pesection:first-child { border-top: none; margin-top: 0; padding-top: 0; }
-.pesection h4 {
-  margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+.pesection h4, .subhead {
+  margin: 0 0 var(--s2); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .10em;
   color: var(--muted); font-weight: 600;
 }
 
-.petools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.petools { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); }
 .petools button {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 7px 2px; font-size: 9px; color: var(--muted);
+  height: auto;
+  display: flex; flex-direction: column; align-items: center; gap: var(--s1);
+  padding: var(--s2) 2px; font-size: var(--fs-micro); color: var(--muted);
 }
-.petools button span { font-size: 15px; line-height: 1; }
-.petools button.active { background: #33384a; border-color: var(--accent); color: var(--text); }
+.petools button span { font-size: var(--fs-lg); line-height: 1; }
+.petools button.active {
+  background: var(--surface-3); border-color: var(--accent-dim); color: var(--text);
+  box-shadow: inset 0 1px 0 var(--bevel), 0 0 0 3px var(--accent-wash);
+}
 
-.pegrid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
-.pegrid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.pegrid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s2); }
+.pegrid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); }
 
-.pestage { flex: 1; position: relative; min-width: 0; background: #171a21; }
+.pestage {
+  flex: 1; position: relative; min-width: 0;
+  background: radial-gradient(ellipse 80% 80% at 50% 45%, #191d26 0%, #101319 100%);
+}
 #peCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .pestatus {
-  position: absolute; left: 10px; bottom: 10px; font-size: 11px; color: var(--muted);
-  background: rgba(24,27,34,.9); border: 1px solid var(--line);
-  border-radius: 5px; padding: 4px 8px; pointer-events: none;
+  position: absolute; left: var(--s3); bottom: var(--s3); font-size: var(--fs-xs); color: var(--muted);
+  border-radius: var(--r-md); padding: var(--s1) var(--s2); pointer-events: none;
   font-variant-numeric: tabular-nums;
 }
 .petoast {
-  position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
-  background: #232733; border: 1px solid var(--accent); color: var(--text);
-  padding: 8px 14px; border-radius: 6px; font-size: 12px;
-  opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 80%;
+  position: absolute; left: 50%; bottom: var(--s4); transform: translateX(-50%);
+  border-color: var(--accent-dim); color: var(--text);
+  padding: var(--s2) var(--s4); border-radius: var(--r-md); font-size: var(--fs-sm);
+  opacity: 0; transition: opacity var(--t-mid); pointer-events: none; max-width: 80%;
 }
 .petoast.show { opacity: 1; }
 
-.peswatches { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.peswatches { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--s1); }
 .peswatchbtn {
-  aspect-ratio: 1; padding: 0; border-radius: 4px; border: 1px solid rgba(0,0,0,.5);
-  cursor: pointer;
+  aspect-ratio: 1; height: auto; padding: 0; border-radius: var(--r-xs);
+  border: 1px solid rgba(0, 0, 0, .5); cursor: pointer; box-shadow: var(--sh-1);
 }
-.peswatchbtn:hover { outline: 2px solid var(--accent); }
+.peswatchbtn:hover { box-shadow: 0 0 0 2px var(--accent), var(--sh-1); }
 
-.pelayers { max-height: 190px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
+.pelayers { max-height: 190px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 .pelayer {
-  display: flex; align-items: center; gap: 6px; padding: 4px 6px;
-  background: var(--panel-2); border: 1px solid transparent; border-radius: 4px;
-  font-size: 11px; cursor: pointer;
+  display: flex; align-items: center; gap: var(--s2); padding: var(--s1) var(--s2);
+  background: var(--surface-2); border: 1px solid transparent; border-radius: var(--r-sm);
+  font-size: var(--fs-xs); cursor: pointer;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
-.pelayer:hover { border-color: #454c5d; }
-.pelayer.sel { border-color: var(--accent); background: #33384a; }
+.pelayer:hover { border-color: var(--line-strong); background: var(--surface-3); }
+.pelayer.sel {
+  border-color: var(--accent-dim); background: var(--surface-3);
+  box-shadow: inset 0 1px 0 var(--bevel);
+}
 .pelayer span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .peswatch {
-  width: 14px; height: 14px; border-radius: 3px; flex: none;
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,.55);
+  width: 14px; height: 14px; border-radius: var(--r-xs); flex: none;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .55);
 }
 .peeye {
-  padding: 0 4px; font-size: 10px; background: transparent; border: none;
-  color: var(--muted); cursor: pointer; line-height: 1;
+  height: auto; padding: 0 var(--s1); font-size: var(--fs-micro); background: transparent;
+  border: none; color: var(--muted); cursor: pointer; line-height: 1; box-shadow: none;
 }
 .peeye:hover { color: var(--text); background: transparent; }
 
-.pelibrary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.pelibrary { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); }
 .pelibcell {
-  position: relative; background: var(--panel-2); border: 1px solid var(--line);
-  border-radius: 5px; padding: 3px; cursor: pointer; text-align: center;
+  position: relative; border: 1px solid var(--line-strong); padding: var(--s1);
+  text-align: center; border-radius: var(--r-sm);
 }
-.pelibcell:hover { border-color: var(--accent); }
-.pelibcell canvas { width: 100%; height: auto; display: block; border-radius: 3px; }
+.pelibcell:hover { border-color: var(--accent-dim); }
+.pelibcell canvas { width: 100%; height: auto; display: block; border-radius: var(--r-xs); }
 .pelibcell span {
-  display: block; font-size: 9px; color: var(--muted); margin-top: 2px;
+  display: block; font-size: var(--fs-micro); color: var(--muted); margin-top: 2px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.pelibcell .peeye { position: absolute; top: 1px; right: 1px; color: #e79383; }
-
-.subhead { margin: 0 0 8px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.pelibcell .peeye { position: absolute; top: 0; right: 0; color: var(--danger-hi); }
 
 .pickersearch {
-  width: 100%; margin-bottom: 8px; padding: 5px 8px; font-size: 12px;
-  background: var(--panel-2); color: var(--text);
-  border: 1px solid var(--line); border-radius: var(--radius);
+  width: 100%; height: 30px; margin-bottom: var(--s2); padding: 0 var(--s2);
+  font-size: var(--fs-sm);
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--line-strong); border-radius: var(--r-sm);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .28);
 }
-.pickersearch:focus { outline: none; border-color: var(--accent-2); }
-.pickerempty { font-size: 11px; color: var(--muted); padding: 6px 2px; }
+.pickersearch:focus {
+  outline: none; border-color: var(--accent-2);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .28), 0 0 0 3px rgba(127, 179, 213, .18);
+}
+.pickerempty { font-size: var(--fs-xs); color: var(--muted); padding: var(--s2) 2px; }
 
 /* ---------- prop variants ---------- */
 
-.variants { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 9px; }
+.variants { display: flex; flex-wrap: wrap; gap: var(--s1); margin: var(--s2) 0 var(--s3); }
 .variants:empty { display: none; }
 .variants > button {
   width: 34px; height: 34px; padding: 0; flex: none;
-  background: var(--panel-2); border: 2px solid transparent; border-radius: 4px;
+  background: var(--surface-2); border: 2px solid transparent; border-radius: var(--r-sm);
+  box-shadow: none;
+  transition: border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
 }
-.variants > button:hover { border-color: #4a5266; }
-.variants > button.active { border-color: var(--accent); }
+.variants > button:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+.variants > button.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash); }
 .variants > button canvas { display: block; width: 30px; height: 30px; }
