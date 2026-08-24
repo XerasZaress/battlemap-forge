@@ -11,12 +11,12 @@
 
   <!-- ============ LEFT PANEL ============ -->
   <nav class="rail" id="railLeft">
-    <div class="raillogo" title="Battlemap Forge">⚒</div>
-    <button data-side="left" data-panel="generate" title="Generate a map (G)">✦</button>
-    <button data-side="left" data-panel="appearance" title="Appearance &amp; lighting">◐</button>
-    <button data-side="left" data-panel="trace" title="Trace an existing map">🖼</button>
-    <button data-side="left" data-panel="export" title="Export">💾</button>
-    <button data-side="left" data-panel="help" title="Shortcuts &amp; VTT notes">?</button>
+    <div class="raillogo" title="Battlemap Forge" aria-hidden="true"><i data-icon="anvil"></i></div>
+    <button data-side="left" data-panel="generate" title="Generate a map (G)" aria-label="Generate a map (G)"><i data-icon="sparkles"></i></button>
+    <button data-side="left" data-panel="appearance" title="Appearance &amp; lighting" aria-label="Appearance &amp; lighting"><i data-icon="contrast"></i></button>
+    <button data-side="left" data-panel="trace" title="Trace an existing map" aria-label="Trace an existing map"><i data-icon="image"></i></button>
+    <button data-side="left" data-panel="export" title="Export" aria-label="Export"><i data-icon="save"></i></button>
+    <button data-side="left" data-panel="help" title="Shortcuts &amp; VTT notes" aria-label="Shortcuts &amp; VTT notes"><i data-icon="help"></i></button>
   </nav>
 
   <aside class="panel" id="leftPanel">
@@ -26,7 +26,7 @@
     </div>
 
     <section class="group" data-group="generate">
-      <h2>Generate <span class="chev" title="Close this panel">✕</span></h2>
+      <h2>Generate <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
 
       <label class="field">
         <span>Map type</span>
@@ -38,7 +38,7 @@
       </label>
       <div class="row" style="margin:-6px 0 9px">
         <input type="text" id="seed" value="ashfall" spellcheck="false">
-        <button id="rerollSeed" class="sm" style="flex:0 0 38px" title="Random seed">🎲</button>
+        <button id="rerollSeed" class="sm" style="flex:0 0 38px" title="Random seed"><i data-icon="dice"></i></button>
       </div>
 
       <div class="row">
@@ -81,7 +81,7 @@
     </section>
 
     <section class="group" data-group="appearance">
-      <h2>Appearance <span class="chev" title="Close this panel">✕</span></h2>
+      <h2>Appearance <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
       <label class="check"><input type="checkbox" id="optGrid" checked> Show grid</label>
       <div class="row">
         <label class="field"><span>Grid colour</span><input type="color" id="gridColor" value="#000000"></label>
@@ -116,7 +116,7 @@
     </section>
 
     <section class="group" data-group="trace">
-      <h2>Trace an existing map <span class="chev" title="Close this panel">✕</span></h2>
+      <h2>Trace an existing map <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
       <p class="hint" style="margin-top:0">Load any map image (Czepeku, Patreon art, a scan) and paint walls over it, then export a Universal VTT with line-of-sight built in.</p>
       <input type="file" id="bgFile" accept="image/*" style="display:none">
       <div class="stack">
@@ -149,7 +149,7 @@
     </section>
 
     <section class="group" data-group="export">
-      <h2>Export <span class="chev" title="Close this panel">✕</span></h2>
+      <h2>Export <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
       <label class="field"><span>Map name</span><input type="text" id="mapName" value="Untitled Map"></label>
       <label class="field">
         <span>Export resolution</span>
@@ -186,7 +186,7 @@
     </section>
 
     <section class="group" data-group="help">
-      <h2>Shortcuts &amp; VTT notes <span class="chev" title="Close this panel">✕</span></h2>
+      <h2>Shortcuts &amp; VTT notes <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
       <p class="hint" style="margin-top:0">
         <kbd>G</kbd> forge &nbsp; <kbd>B</kbd> paint &nbsp; <kbd>P</kbd> prop &nbsp; <kbd>D</kbd> door &nbsp;
         <kbd>L</kbd> light &nbsp; <kbd>W</kbd> wall &nbsp; <kbd>E</kbd> erase &nbsp; <kbd>V</kbd>/<kbd>S</kbd> select &nbsp;
@@ -221,13 +221,16 @@
     <canvas id="view"></canvas>
 
     <div id="topbar">
-      <button id="undoBtn" class="sm" title="Undo (⌘Z)">↶</button>
-      <button id="redoBtn" class="sm" title="Redo (⇧⌘Z)">↷</button>
+      <button id="undoBtn" class="sm iconbtn" title="Undo (⌘Z)" aria-label="Undo (⌘Z)"><i data-icon="undo"></i></button>
+      <button id="redoBtn" class="sm iconbtn" title="Redo (⇧⌘Z)" aria-label="Redo (⇧⌘Z)"><i data-icon="redo"></i></button>
       <div class="sep"></div>
-      <button id="zoomOut" class="sm" title="Zoom out">−</button>
+      <button id="zoomOut" class="sm iconbtn" title="Zoom out" aria-label="Zoom out"><i data-icon="minus"></i></button>
       <div class="zoomval" id="zoomVal">100%</div>
-      <button id="zoomIn" class="sm" title="Zoom in">+</button>
+      <button id="zoomIn" class="sm iconbtn" title="Zoom in" aria-label="Zoom in"><i data-icon="plus"></i></button>
       <button id="fitBtn" class="sm" title="Fit to screen (F)">Fit</button>
+      <div class="sep"></div>
+      <button id="paletteBtn" class="sm palbtn" title="Search every command (⌘K)"
+              aria-label="Search every command"><i data-icon="search"></i><kbd>⌘K</kbd></button>
       <div class="sep"></div>
       <button id="quickGen" class="sm primary" title="Forge a new map (G)">Forge</button>
     </div>
@@ -241,7 +244,7 @@
   <!-- ============ RIGHT PANEL ============ -->
   <aside class="panel right" id="rightPanel">
     <section class="group" data-group="tools">
-      <h2>Tool options <span class="chev" title="Close this panel">✕</span></h2>
+      <h2>Tool options <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
       <label class="field"><span>Brush size <b id="brushLbl">1</b></span>
         <input type="range" id="brushSize" min="1" max="12" step="1" value="1"></label>
       <label class="check"><input type="checkbox" id="brushRound"> Round brush</label>
@@ -255,14 +258,14 @@
     </section>
 
     <section class="group" data-group="prefabs">
-      <h2>Prefab rooms <span class="chev" title="Close this panel">✕</span></h2>
+      <h2>Prefab rooms <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
       <input type="search" id="roomSearch" class="pickersearch" placeholder="Search rooms…" autocomplete="off">
       <div class="tabs" id="roomTabs"></div>
       <div class="roomgrid" id="roomGrid"></div>
       <div class="divider"></div>
       <div class="row">
-        <button id="roomRotate" class="sm" title="Turn the room 90° (R)">↻ Turn</button>
-        <button id="roomFlip" class="sm" title="Mirror the room (X)">⇄ Flip</button>
+        <button id="roomRotate" class="sm" title="Turn the room 90° (R)"><i data-icon="rotateCw"></i> Turn</button>
+        <button id="roomFlip" class="sm" title="Mirror the room (X)"><i data-icon="flipH"></i> Flip</button>
       </div>
       <p class="hint" id="roomOrient" style="margin:6px 0 0"></p>
       <label class="check" style="margin-top:8px"><input type="checkbox" id="roomConnect" checked>
@@ -284,12 +287,12 @@
       <div id="roomSelBox" class="roomsel">
         <div class="tformhead"><span id="roomSelName">Room</span></div>
         <div class="row">
-          <button id="selTurn" class="sm" title="Turn 90° (R)">↻ Turn</button>
-          <button id="selFlip" class="sm" title="Mirror (X)">⇄ Flip</button>
+          <button id="selTurn" class="sm" title="Turn 90° (R)"><i data-icon="rotateCw"></i> Turn</button>
+          <button id="selFlip" class="sm" title="Mirror (X)"><i data-icon="flipH"></i> Flip</button>
         </div>
         <div class="row" style="margin-top:6px">
-          <button id="selDupe" class="sm" title="Duplicate (D)">⧉ Copy</button>
-          <button id="selDelete" class="sm danger" title="Delete (⌫)">🗑 Delete</button>
+          <button id="selDupe" class="sm" title="Duplicate (D)"><i data-icon="copy"></i> Copy</button>
+          <button id="selDelete" class="sm danger" title="Delete (⌫)"><i data-icon="trash"></i> Delete</button>
         </div>
         <p class="hint" style="margin:7px 0 0">Drag the room on the map to move it. Lifting a
           room restores whatever it was covering.</p>
@@ -297,12 +300,12 @@
     </section>
 
     <section class="group" data-group="terrain">
-      <h2>Terrain <span class="chev" title="Close this panel">✕</span></h2>
+      <h2>Terrain <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
       <div class="swatches" id="swatches"></div>
     </section>
 
     <section class="group" data-group="props">
-      <h2>Props <span class="chev" title="Close this panel">✕</span></h2>
+      <h2>Props <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
       <input type="search" id="propSearch" class="pickersearch" placeholder="Search props…" autocomplete="off">
       <div class="tabs" id="propTabs"></div>
       <div class="propgrid" id="propGrid"></div>
@@ -320,8 +323,8 @@
         <label class="field"><span>Direction <b><span id="propRotLbl">0</span>°</b></span>
           <input type="range" id="propRot" min="0" max="359" step="1" value="0"></label>
         <div class="row" style="margin:-4px 0 9px">
-          <button class="sm" id="rotLeft" title="Rotate 15° left">↺ 15°</button>
-          <button class="sm" id="rotRight" title="Rotate 15° right">↻ 15°</button>
+          <button class="sm" id="rotLeft" title="Rotate 15° left"><i data-icon="rotateCcw"></i> 15°</button>
+          <button class="sm" id="rotRight" title="Rotate 15° right"><i data-icon="rotateCw"></i> 15°</button>
         </div>
         <label class="field"><span>Snap direction to</span>
           <select id="propSnap">
@@ -365,7 +368,7 @@
 
         <label class="check"><input type="checkbox" id="propSunk"> Under the water — draw below the surface</label>
         <label class="check"><input type="checkbox" id="propRandomRot" checked> Vary angle &amp; size when placing</label>
-        <button id="openPropEditor" class="wide sm" style="margin-top:8px">✎ Design your own prop…</button>
+        <button id="openPropEditor" class="wide sm" style="margin-top:8px"><i data-icon="pencil"></i> Design your own prop…</button>
         <p class="hint" id="tformHint" style="margin-top:2px">
           Applies to props you place next. Switch to the <b>Select</b> tool and click a prop
           to re-shape one already on the map.
@@ -374,7 +377,7 @@
     </section>
 
     <section class="group" data-group="stats">
-      <h2>Map info <span class="chev" title="Close this panel">✕</span></h2>
+      <h2>Map info <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
       <p class="hint" id="statsBox" style="margin-top:0"></p>
       <button id="clearProps" class="wide sm">Clear all props</button>
       <button id="relight" class="wide sm" style="margin-top:6px">Rebuild lights from props</button>
@@ -383,26 +386,26 @@
 
   <nav class="rail right" id="railRight">
     <div class="railtools" id="toolGrid">
-      <button data-tool="select" class="active" title="Select — click a prop or room (V)">⬈</button>
-      <button data-tool="brush" title="Paint terrain (B)">🖌</button>
-      <button data-tool="rect" title="Rectangle of terrain (R)">▭</button>
-      <button data-tool="room" title="Room — floor + walls (O)">▦</button>
-      <button data-tool="edge" title="Partition — wall segments (K)">┃</button>
-      <button data-tool="door" title="Door (D)">🚪</button>
-      <button data-tool="stamp" title="Prefab room (M)">🏠</button>
-      <button data-tool="prop" title="Place prop (P)">🪑</button>
-      <button data-tool="light" title="Light source (L)">🔥</button>
-      <button data-tool="wall" title="Solid rock (W)">🧱</button>
-      <button data-tool="erase" title="Erase objects (E)">🧽</button>
-      <button data-tool="pick" title="Sample terrain (I)">💧</button>
-      <button data-tool="pan" title="Pan (H)">✋</button>
+      <button data-tool="select" class="active" title="Select — click a prop or room (V)" aria-label="Select — click a prop or room (V)"><i data-icon="cursor"></i></button>
+      <button data-tool="brush" title="Paint terrain (B)" aria-label="Paint terrain (B)"><i data-icon="brush"></i></button>
+      <button data-tool="rect" title="Rectangle of terrain (R)" aria-label="Rectangle of terrain (R)"><i data-icon="square"></i></button>
+      <button data-tool="room" title="Room — floor + walls (O)" aria-label="Room — floor + walls (O)"><i data-icon="room"></i></button>
+      <button data-tool="edge" title="Partition — wall segments (K)" aria-label="Partition — wall segments (K)"><i data-icon="partition"></i></button>
+      <button data-tool="door" title="Door (D)" aria-label="Door (D)"><i data-icon="door"></i></button>
+      <button data-tool="stamp" title="Prefab room (M)" aria-label="Prefab room (M)"><i data-icon="house"></i></button>
+      <button data-tool="prop" title="Place prop (P)" aria-label="Place prop (P)"><i data-icon="chair"></i></button>
+      <button data-tool="light" title="Light source (L)" aria-label="Light source (L)"><i data-icon="flame"></i></button>
+      <button data-tool="wall" title="Solid rock (W)" aria-label="Solid rock (W)"><i data-icon="bricks"></i></button>
+      <button data-tool="erase" title="Erase objects (E)" aria-label="Erase objects (E)"><i data-icon="eraser"></i></button>
+      <button data-tool="pick" title="Sample terrain (I)" aria-label="Sample terrain (I)"><i data-icon="pipette"></i></button>
+      <button data-tool="pan" title="Pan (H)" aria-label="Pan (H)"><i data-icon="hand"></i></button>
     </div>
     <div class="raildiv"></div>
-    <button data-side="right" data-panel="tools" title="Tool options">⚙</button>
-    <button data-side="right" data-panel="terrain" title="Terrain palette">▦</button>
-    <button data-side="right" data-panel="props" title="Props">🪑</button>
-    <button data-side="right" data-panel="prefabs" title="Prefab rooms">🏠</button>
-    <button data-side="right" data-panel="stats" title="Map info">ℹ</button>
+    <button data-side="right" data-panel="tools" title="Tool options" aria-label="Tool options"><i data-icon="sliders"></i></button>
+    <button data-side="right" data-panel="terrain" title="Terrain palette" aria-label="Terrain palette"><i data-icon="grid"></i></button>
+    <button data-side="right" data-panel="props" title="Props" aria-label="Props"><i data-icon="chair"></i></button>
+    <button data-side="right" data-panel="prefabs" title="Prefab rooms" aria-label="Prefab rooms"><i data-icon="house"></i></button>
+    <button data-side="right" data-panel="stats" title="Map info" aria-label="Map info"><i data-icon="info"></i></button>
   </nav>
 
   <!-- ============ PROP EDITOR ============ -->
@@ -411,8 +414,8 @@
       <strong>Prop Designer</strong>
       <span class="pehint">Draw in grid squares — the gold box is the prop's footprint</span>
       <span style="flex:1"></span>
-      <button id="peUndoBtn" class="sm" title="Undo (⌘Z)">↶</button>
-      <button id="peRedoBtn" class="sm" title="Redo (⇧⌘Z)">↷</button>
+      <button id="peUndoBtn" class="sm iconbtn" title="Undo (⌘Z)" aria-label="Undo (⌘Z)"><i data-icon="undo"></i></button>
+      <button id="peRedoBtn" class="sm iconbtn" title="Redo (⇧⌘Z)" aria-label="Redo (⇧⌘Z)"><i data-icon="redo"></i></button>
       <button id="peFitBtn" class="sm" title="Fit (F)">Fit</button>
       <button id="peSave" class="sm primary">Save prop</button>
       <button id="peClose" class="sm">Close</button>
@@ -421,15 +424,15 @@
     <div class="pebody">
       <div class="pecol left">
         <div class="petools" id="peTools">
-          <button data-petool="select" class="active" title="Select (V)"><span>⬈</span>Select</button>
-          <button data-petool="node" title="Direct select — edit points (A)"><span>⌁</span>Points</button>
-          <button data-petool="pen" title="Pen (P)"><span>✒</span>Pen</button>
-          <button data-petool="rect" title="Rectangle (M)"><span>▭</span>Rect</button>
-          <button data-petool="ellipse" title="Ellipse (L)"><span>◯</span>Ellipse</button>
-          <button data-petool="poly" title="Polygon (N)"><span>⬠</span>Polygon</button>
-          <button data-petool="star" title="Star (S)"><span>★</span>Star</button>
-          <button data-petool="line" title="Line (\)"><span>╱</span>Line</button>
-          <button data-petool="hand" title="Pan (H)"><span>✋</span>Pan</button>
+          <button data-petool="select" class="active" title="Select (V)"><i data-icon="cursor"></i>Select</button>
+          <button data-petool="node" title="Direct select — edit points (A)"><i data-icon="nodes"></i>Points</button>
+          <button data-petool="pen" title="Pen (P)"><i data-icon="pen"></i>Pen</button>
+          <button data-petool="rect" title="Rectangle (M)"><i data-icon="square"></i>Rect</button>
+          <button data-petool="ellipse" title="Ellipse (L)"><i data-icon="circle"></i>Ellipse</button>
+          <button data-petool="poly" title="Polygon (N)"><i data-icon="pentagon"></i>Polygon</button>
+          <button data-petool="star" title="Star (S)"><i data-icon="star"></i>Star</button>
+          <button data-petool="line" title="Line (\)"><i data-icon="line"></i>Line</button>
+          <button data-petool="hand" title="Pan (H)"><i data-icon="hand"></i>Pan</button>
         </div>
 
         <div class="pesection">
@@ -444,27 +447,27 @@
         <div class="pesection">
           <h4>Arrange</h4>
           <div class="pegrid4">
-            <button data-arrange="front" class="sm" title="Bring to front">⤒</button>
-            <button data-arrange="forward" class="sm" title="Forward (])">↑</button>
-            <button data-arrange="backward" class="sm" title="Backward ([)">↓</button>
-            <button data-arrange="back" class="sm" title="Send to back">⤓</button>
+            <button data-arrange="front" class="sm" title="Bring to front" aria-label="Bring to front"><i data-icon="toFront"></i></button>
+            <button data-arrange="forward" class="sm" title="Forward (])" aria-label="Forward (])"><i data-icon="up"></i></button>
+            <button data-arrange="backward" class="sm" title="Backward ([)" aria-label="Backward ([)"><i data-icon="down"></i></button>
+            <button data-arrange="back" class="sm" title="Send to back" aria-label="Send to back"><i data-icon="toBack"></i></button>
           </div>
           <h4 style="margin-top:10px">Align</h4>
           <div class="pegrid3">
-            <button data-align="left" class="sm">⇤</button>
-            <button data-align="hcenter" class="sm">↔</button>
-            <button data-align="right" class="sm">⇥</button>
-            <button data-align="top" class="sm">⇡</button>
-            <button data-align="vcenter" class="sm">↕</button>
-            <button data-align="bottom" class="sm">⇣</button>
+            <button data-align="left" class="sm iconbtn" title="Align left edges" aria-label="Align left edges"><i data-icon="alignLeft"></i></button>
+            <button data-align="hcenter" class="sm iconbtn" title="Align horizontal centres" aria-label="Align horizontal centres"><i data-icon="alignCenterH"></i></button>
+            <button data-align="right" class="sm iconbtn" title="Align right edges" aria-label="Align right edges"><i data-icon="alignRight"></i></button>
+            <button data-align="top" class="sm iconbtn" title="Align top edges" aria-label="Align top edges"><i data-icon="alignTop"></i></button>
+            <button data-align="vcenter" class="sm iconbtn" title="Align vertical centres" aria-label="Align vertical centres"><i data-icon="alignCenterV"></i></button>
+            <button data-align="bottom" class="sm iconbtn" title="Align bottom edges" aria-label="Align bottom edges"><i data-icon="alignBottom"></i></button>
           </div>
           <p class="hint" style="margin:6px 0 0">With one shape selected, aligns to the footprint.</p>
           <h4 style="margin-top:10px">Transform</h4>
           <div class="pegrid4">
-            <button data-flip="h" class="sm" title="Flip horizontal">⇄</button>
-            <button data-flip="v" class="sm" title="Flip vertical">⇅</button>
-            <button data-rot="-15" class="sm" title="Rotate -15°">↺</button>
-            <button data-rot="15" class="sm" title="Rotate 15°">↻</button>
+            <button data-flip="h" class="sm" title="Flip horizontal" aria-label="Flip horizontal"><i data-icon="flipH"></i></button>
+            <button data-flip="v" class="sm" title="Flip vertical" aria-label="Flip vertical"><i data-icon="flipV"></i></button>
+            <button data-rot="-15" class="sm" title="Rotate -15°" aria-label="Rotate -15°"><i data-icon="rotateCcw"></i></button>
+            <button data-rot="15" class="sm" title="Rotate 15°" aria-label="Rotate 15°"><i data-icon="rotateCw"></i></button>
           </div>
           <div class="row" style="margin-top:6px">
             <button id="peDup" class="sm">Duplicate</button>
@@ -580,10 +583,12 @@
 <script src="js/exporters.js"></script>
 <script src="js/autotrace.js"></script>
 <script src="js/svgimport.js"></script>
+<script src="js/icons.js"></script>
 <script src="js/customprops.js"></script>
 <script src="js/propeditor.js"></script>
 <script src="js/tooltip.js"></script>
 <script src="js/rangefill.js"></script>
 <script src="js/app.js"></script>
+<script src="js/palette.js"></script>
 </body>
 </html>
