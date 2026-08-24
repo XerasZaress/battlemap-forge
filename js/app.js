@@ -2133,6 +2133,9 @@ function syncSliderLabels() {
   for (const [id, lbl] of SLIDER_LABELS) if ($(id) && $(lbl)) $(lbl).textContent = $(id).value;
   $('ppgLbl').textContent = $('ppg').value;
   $('brushLbl').textContent = state.brush;
+  /* Values set from state rather than dragged fire no event, so the filled
+     part of each track has to be repainted here too. */
+  if (typeof initRangeFill === 'function') initRangeFill();
 }
 
 /* ---------------- wiring ---------------- */
