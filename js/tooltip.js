@@ -20,10 +20,16 @@ function tipNode() {
 }
 
 /** The label lives in `title` until first hover, then moves to `data-tip` so
-    the browser stops drawing its own tooltip over ours. */
+    the browser stops drawing its own tooltip over ours. On an icon-only
+    control `title` may be the only accessible name it has, and removing it
+    would leave a screen reader with nothing to announce — so the name is
+    copied to `aria-label` first, unless the control already carries one. */
 function tipTextFor(el) {
   if (el.dataset.tip == null && el.title) {
     el.dataset.tip = el.title;
+    if (!el.getAttribute('aria-label') && !el.textContent.trim()) {
+      el.setAttribute('aria-label', el.title);
+    }
     el.removeAttribute('title');
   }
   return el.dataset.tip || '';

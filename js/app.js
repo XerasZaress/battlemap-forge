@@ -373,10 +373,10 @@ function applyHandleDrag(sp, ev) {
 /* ---------------- floating toolbar ---------------- */
 
 const FLOAT_ACTIONS = [
-  { act: 'turn', label: '↻', title: 'Turn (R)' },
-  { act: 'flip', label: '⇄', title: 'Flip (X)' },
-  { act: 'copy', label: '⧉', title: 'Duplicate (D)' },
-  { act: 'delete', label: '✕', title: 'Delete (⌫)', cls: 'danger' }
+  { act: 'turn', icon: 'rotateCw', title: 'Turn (R)' },
+  { act: 'flip', icon: 'flipH', title: 'Flip (X)' },
+  { act: 'copy', icon: 'copy', title: 'Duplicate (D)' },
+  { act: 'delete', icon: 'trash', title: 'Delete (⌫)', cls: 'danger' }
 ];
 
 function buildFloatBar() {
@@ -384,8 +384,9 @@ function buildFloatBar() {
   if (bar.dataset.built) return;
   for (const a of FLOAT_ACTIONS) {
     const b = document.createElement('button');
-    b.textContent = a.label;
+    b.innerHTML = iconSvg(a.icon);
     b.title = a.title;
+    b.setAttribute('aria-label', a.title);
     if (a.cls) b.className = a.cls;
     b.addEventListener('pointerdown', e => e.stopPropagation());
     b.addEventListener('click', () => floatAction(a.act));
@@ -459,6 +460,7 @@ function floatAction(act) {
     syncLightsFromProps(state.map);
     syncTransformUI();
     refresh(false);
+    toast('Prop deleted — ⌘Z puts it back.');
   }
 }
 
@@ -1614,6 +1616,19 @@ const SHORT_NAMES = {
   irock: 'Frozen', sky: 'Sky', cloud: 'Cloud', void: 'Void'
 };
 
+/** The picker cells are divs, so the browser gives them none of a button's
+    behaviour — no tab stop, no Enter, no name. This lends them all three
+    without changing the markup the layout depends on. */
+function asButton(el, label, onActivate) {
+  el.setAttribute('role', 'button');
+  el.setAttribute('tabindex', '0');
+  el.setAttribute('aria-label', label);
+  el.addEventListener('click', onActivate);
+  el.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); onActivate(); }
+  });
+}
+
 function buildSwatches() {
   const box = $('swatches');
   box.innerHTML = '';
@@ -1627,7 +1642,8 @@ function buildSwatches() {
     const lbl = document.createElement('span');
     lbl.textContent = SHORT_NAMES[mat.key] || mat.label.split(' ')[0];
     el.appendChild(lbl);
-    el.addEventListener('click', () => setMaterial(id));
+    el.setAttribute('aria-pressed', id === state.mat ? 'true' : 'false');
+    asButton(el, mat.label, () => setMaterial(id));
     box.appendChild(el);
   }
 }
@@ -1635,8 +1651,11 @@ function buildSwatches() {
 function setMaterial(id) {
   if (!MATS[id]) return;
   state.mat = id;
-  for (const el of document.querySelectorAll('.swatch'))
-    el.classList.toggle('active', +el.dataset.mat === id);
+  for (const el of document.querySelectorAll('.swatch')) {
+    const on = +el.dataset.mat === id;
+    el.classList.toggle('active', on);
+    el.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
   if (state.tool === 'pick') setTool('brush');
 }
 
@@ -1681,7 +1700,8 @@ function buildPropPanel() {
     try { thumb.draw(ctx, u, seededFn(7)); } catch (e) { /* thumbnail only */ }
     ctx.restore();
     cell.appendChild(c);
-    cell.addEventListener('click', () => {
+    cell.setAttribute('aria-pressed', def.key === state.prop ? 'true' : 'false');
+    asButton(cell, def.label, () => {
       if (def.key !== state.prop) state.propVariant = 0;
       state.prop = def.key;
       setTool('prop');
@@ -1745,7 +1765,8 @@ function buildRoomPanel() {
     label.textContent = def.label;
     cell.appendChild(c);
     cell.appendChild(label);
-    cell.addEventListener('click', () => {
+    cell.setAttribute('aria-pressed', def.key === state.roomKey ? 'true' : 'false');
+    asButton(cell, def.label + ', ' + def.w + ' by ' + def.h + ' squares', () => {
       state.roomKey = def.key;
       setTool('stamp');
       buildRoomPanel();
@@ -1770,8 +1791,11 @@ function setTool(tool) {
   const changed = state.tool !== tool;
   state.tool = tool;
   if (changed && TOOL_PANEL[tool] && panelState.right) ensurePanel('right', TOOL_PANEL[tool]);
-  for (const b of document.querySelectorAll('#toolGrid button'))
-    b.classList.toggle('active', b.dataset.tool === tool);
+  for (const b of document.querySelectorAll('#toolGrid button')) {
+    const on = b.dataset.tool === tool;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
   if (tool !== 'select') {
     if (state.selected != null) { state.selected = null; syncTransformUI(); }
     if (state.selRoomId != null) { state.selRoomId = null; syncRoomSelUI(); }
@@ -1809,8 +1833,11 @@ function showPanel(side, name) {
   for (const sec of panel.querySelectorAll('section.group'))
     sec.classList.toggle('showing', sec.dataset.group === panelState[side]);
   for (const b of document.querySelectorAll('.rail > button[data-panel]'))
-    if (b.dataset.side === side)
-      b.classList.toggle('open', b.dataset.panel === panelState[side]);
+    if (b.dataset.side === side) {
+      const on = b.dataset.panel === panelState[side];
+      b.classList.toggle('open', on);
+      b.setAttribute('aria-expanded', on ? 'true' : 'false');
+    }
 
   try { localStorage.setItem(PANEL_STATE_KEY, JSON.stringify(panelState)); } catch (e) { }
 
@@ -1838,12 +1865,19 @@ function setupPanels() {
   for (const b of document.querySelectorAll('.rail > button[data-panel]'))
     b.addEventListener('click', () => showPanel(b.dataset.side, b.dataset.panel));
 
-  // the ✕ in a section header shuts that side
+  // The header shuts that side. The ✕ inside it is a real button so the panel
+  // can also be closed from the keyboard; it stops the header handler firing
+  // twice on the same click.
   for (const sec of document.querySelectorAll('section.group')) {
     const h2 = sec.querySelector('h2');
     if (!h2) continue;
     const side = sec.closest('#leftPanel') ? 'left' : 'right';
     h2.addEventListener('click', () => showPanel(side, panelState[side]));
+    const chev = h2.querySelector('.chev');
+    if (chev) chev.addEventListener('click', ev => {
+      ev.stopPropagation();
+      showPanel(side, panelState[side]);
+    });
   }
 
   // apply the remembered state

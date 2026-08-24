@@ -711,7 +711,9 @@ function peBuildLayers() {
     const name = document.createElement('span');
     name.textContent = s.name || (s.type === 'compound' ? 'compound path' : s.type);
     const eye = document.createElement('button');
-    eye.className = 'peeye'; eye.textContent = s.hidden ? '○' : '●';
+    eye.className = 'peeye';
+    eye.innerHTML = iconSvg(s.hidden ? 'eyeOff' : 'eye');
+    eye.setAttribute('aria-label', s.hidden ? 'Show this shape' : 'Hide this shape');
     eye.title = 'Show / hide';
     eye.addEventListener('click', (e) => { e.stopPropagation(); s.hidden = !s.hidden; peBuildLayers(); peDraw(); });
     row.append(sw, name, eye);
@@ -801,7 +803,8 @@ function peRefreshLibrary() {
     const lbl = document.createElement('span');
     lbl.textContent = d.label;
     const del = document.createElement('button');
-    del.className = 'peeye'; del.textContent = '✕'; del.title = 'Delete';
+    del.className = 'peeye'; del.innerHTML = iconSvg('trash');
+    del.title = 'Delete'; del.setAttribute('aria-label', 'Delete this prop');
     del.addEventListener('click', (e) => {
       e.stopPropagation();
       if (!confirm('Delete "' + d.label + '"? Maps already using it will lose it.')) return;
