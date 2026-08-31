@@ -1,8 +1,9 @@
 # Battlemap Forge
 
 A browser-based battlemap generator for tabletop RPGs. It forges a map procedurally,
-lets you paint and dress it by hand, and exports it in the formats virtual tabletops
-actually read — including walls, doors and lights, not just a flat picture.
+lets you paint and dress it by hand — down to the weather, the labels and the shape of the
+grid — and exports it in the formats virtual tabletops actually read, including walls,
+doors and lights, not just a flat picture.
 
 **To use it: double-click `index.html`.** No install, no build step, no internet
 connection, no account. Everything runs locally in your browser, and nothing you make
@@ -14,7 +15,7 @@ leaves your machine.
 
 1. Pick a **map type**, set the size in squares, hit **Forge Map**.
 2. Don't like it? Hit the 🎲 for a new seed, or nudge the sliders and forge again.
-3. Touch it up with the paint, prop, door and light tools.
+3. Touch it up with the paint, prop, door, light and label tools, and set the weather.
 4. **Download image** for any VTT, or **Universal VTT** / **Foundry scene** if you want
    walls and lighting to come across too.
 
@@ -100,6 +101,7 @@ stays the original artwork at its original resolution.
 | **Door** | Drop a door into a gap in a wall. Click an existing door to make it secret. |
 | **Light** | Place a light source. Torches, braziers and campfires already carry their own. |
 | **Wall** | Paint stone wall — the main tool when tracing an imported image. |
+| **Label** (`T`) | Write on the map. Click to drop a label, click an existing one to edit it. |
 | **Erase** | Remove props, doors and lights. To erase *terrain*, paint with **Void**. |
 | **Select** (`V`) | The default tool. Click a prop or a placed room to select it, then use its handles and floating toolbar. |
 | **Pick** | Sample the terrain under the cursor. |
@@ -118,8 +120,8 @@ Right-click or alt-click deletes whatever is under the cursor. Middle-drag or
 space-drag pans; the scroll wheel zooms.
 
 **Shortcuts:** `G` forge · `O` room · `K` partition · `M` prefab · `B` paint · `R` rect ·
-`P` prop · `D` door · `L` light · `W` solid · `E` erase · `V` or `S` select · `H` pan ·
-`I` pick ·
+`P` prop · `D` door · `L` light · `W` solid · `T` label · `E` erase · `V` or `S` select ·
+`H` pan · `I` pick ·
 `[` `]` brush size · `⌘Z` / `⇧⌘Z` undo, redo · `F` fit · `0` actual size.
 
 **Rotating:** `Q` and `E` turn whatever you're working with — a selected prop, a placed
@@ -262,7 +264,31 @@ gold arrow shows which way the prop is facing.
 **Vary angle & size when placing** keeps the scattered, natural look: each prop gets a
 random angle (obeying the snap setting) and a slight size jitter. Turn it off when you
 want every prop placed at exactly the angle and size you set — lining up pews, market
-stalls or a row of barrels.
+stalls or a row of barrels. **Mirror at random** flips half of them, which is what stops a
+row of anything asymmetric reading as a row of copies.
+
+### Laying down more than one
+
+Under those is **Placing**, which decides what a click and a drag actually do:
+
+| | |
+|---|---|
+| **One per click** | the default — one prop where you click |
+| **Many** | drag to lay an even trail, spaced by the prop's own footprint and scale |
+| **Scatter** | drag to sow the disc under the cursor |
+
+Scatter is the fast way to plant a wood, spread rubble through a ruin or fill a market with
+crates. **Area** is the radius of the disc, shown as a dashed circle on the cursor.
+**Density** sets the spacing rather than a count: at 1 the props pack as close as their own
+footprints allow, and thinning it pushes them apart — so the same slider reads the same on a
+barrel and on an oak.
+
+Nothing ever lands on top of another of the same kind, which means dragging back over ground
+you have already sown adds nothing rather than doubling up, and two oaks never share a
+square. It is deliberately blind to everything else: scattering undergrowth doesn't refuse
+because there is a barrel nearby, because moss grows round barrels.
+
+The whole drag is one undo step.
 
 ### Re-shaping something already placed
 
@@ -415,6 +441,85 @@ top-down props.
 Two terrain materials support aerial encounters: **Open Sky** and **Cloud**. Paint sky,
 scatter cloud banks, drop a skyship on top, and you have a boarding action. Neither blocks
 line of sight — they're air, not walls.
+
+---
+
+## Weather and time of day
+
+Under **Appearance → Weather & time of day** is a single dropdown that regrades the whole
+map: the same dungeon at noon, at midnight, in driving rain and under falling ash. There
+are twenty settings —
+
+**Clear · Golden hour · Night · Moonlit · Overcast · Fog · Rain · Storm · Snowfall ·
+Blizzard · Sunbeams · Dusty air · Ashfall · Emberlight · Gloom and doom · Underdark ·
+Feywild · Corruption · Red sky · Winter**
+
+— and each one is a colour grade plus whatever falls out of the sky. Storm desaturates and
+darkens, thins the air with haze, drives rain across at a slant and closes the edges in.
+Sunbeams throws shafts from the same corner every prop on the map is already lit from, so
+the beams and the shadows agree. Emberlight screens orange over everything and sends sparks
+up. Underdark takes nearly all the colour out and leaves you only what your own torches
+light.
+
+**Strength** scales the lot, from a hint to overdone. Under it are four controls that work
+on their own or on top of a preset: **saturation**, **contrast**, **warmth** (cold blue
+through to warm orange) and **haze**, which lifts the blacks the way distance does.
+
+Weather is seeded from the map, so the same storm falls in the same places every time —
+export twice and you get the same image, not a reshuffle. It is painted into the exported
+picture; the light *sources* still export separately, so a VTT that lights the scene itself
+will light it through your fog.
+
+---
+
+## Grid shapes
+
+The grid is no longer only squares. **Appearance → Grid shape** offers
+
+| | |
+|---|---|
+| **Square** | 5 ft squares — the default, and what every VTT assumes |
+| **Hex — pointy top** | one square across the flats, so a token covers the same ground |
+| **Hex — flat top** | the same hex the other way up |
+| **Isometric diamond** | two squares wide by one tall, for maps drawn in three-quarter view |
+
+with **line weight**, **nudge X / Y** to line the lattice up with the art, and a **relief
+line** — a second line in the opposite tone laid a hair below the first, which is what keeps
+a black grid readable over black rock and a white one over snow.
+
+Hex and isometric are a drawing convention, not a change to the map: cells, walls, doors and
+every VTT export stay on the square grid underneath. What they give you is a printed sheet,
+or an image for a VTT that draws its own hex overlay.
+
+---
+
+## Labels
+
+The **Label** tool (`T`) writes on the map. Click to drop a label, then type into the
+Labels panel — it is already focused. Click any existing label, with either the Label tool
+or **Select**, to edit it; drag it to move it.
+
+- **Font** — eight faces, drawn from what macOS and Windows already have, so nothing is
+  fetched over the network: serif, old style, inscription, fantasy, script, sans, poster
+  and typewriter. The dropdown previews each one in its own face.
+- **Size** in grid units, so a 1.2 label is a bit over a square tall at any export
+  resolution.
+- **Colour**, **outline** and **outline width** — the outline is what makes type survive
+  whatever colour the floor happens to be, and it is drawn as one pass over the whole label
+  so tight tracking never lets one letter's outline eat the next letter's face.
+- **Drop shadow**, to lift the type off the art.
+- **Tracking** and **line height** — map labels are conventionally wide and sparse.
+- **Angle** and **Curve**. Curve bends the line the letters sit on: positive bows the run
+  over a hill, negative around a bay, so a river or a coastline can be named along its own
+  line rather than across it.
+- **Opacity**.
+
+With nothing selected the panel sets what the *next* label will look like, so writing three
+in the same hand takes one trip through the controls.
+
+Labels draw over everything — fog, baked lighting, the grid — and burn into the exported
+image. `Q`/`E` turn a selected label, `+`/`−` resize it, `D` duplicates, `⌫` deletes,
+`esc` deselects. The Erase tool and right-click remove one too.
 
 ---
 
@@ -572,7 +677,9 @@ js/props.js       the core prop library (every object is drawn in code, not an i
 js/props-fantasy.js  grand statuary, arcane apparatus, chandeliers, rugs, vehicles
 js/rooms.js       prefab furnished rooms
 js/generate.js    the map generators
-js/render.js      the renderer
+js/render.js      the renderer, including the grid lattices
+js/atmosphere.js  weather, time of day and colour grading
+js/labels.js      text on the map
 js/exporters.js   wall extraction and the VTT file formats
 js/app.js         interface, tools, undo, export wiring
 

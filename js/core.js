@@ -164,6 +164,7 @@ class GameMap {
     this.doors = [];          // legacy cell doors {x, y, dir:'h'|'v', secret, open}
     this.lights = [];         // {x, y, range, intensity, color}
     this.extraWalls = [];     // manual LOS segments in grid units [x1,y1,x2,y2]
+    this.labels = [];         // text placed on the map; see labels.js
     this.placements = [];     // live prefab instances; see rooms.js
     this.nextPid = 1;
     this.name = 'Untitled Map';
@@ -253,6 +254,7 @@ class GameMap {
     m.doors = JSON.parse(JSON.stringify(this.doors));
     m.lights = JSON.parse(JSON.stringify(this.lights));
     m.extraWalls = JSON.parse(JSON.stringify(this.extraWalls));
+    m.labels = JSON.parse(JSON.stringify(this.labels));
     m.placements = JSON.parse(JSON.stringify(this.placements));
     m.nextPid = this.nextPid;
     m.name = this.name; m.theme = this.theme; m.seed = this.seed;
@@ -264,6 +266,13 @@ class GameMap {
       cells: Array.from(this.cells), hw: Array.from(this.hw), vw: Array.from(this.vw),
       props: this.props, doors: this.doors,
       lights: this.lights, extraWalls: this.extraWalls,
+      // labels carry a cached text measurement; it is derived, so it never goes
+      // in the file where a later font change could make it a lie
+      labels: this.labels.map(l => {
+        const o = {};
+        for (const k in l) if (k.charAt(0) !== '_') o[k] = l[k];
+        return o;
+      }),
       placements: this.placements, nextPid: this.nextPid
     };
   }
@@ -275,6 +284,7 @@ class GameMap {
     if (o.vw && o.vw.length === m.vw.length) m.vw = Uint8Array.from(o.vw);
     m.props = o.props || []; m.doors = o.doors || [];
     m.lights = o.lights || []; m.extraWalls = o.extraWalls || [];
+    m.labels = o.labels || [];
     m.placements = o.placements || [];
     m.nextPid = o.nextPid || (m.placements.reduce((n, p) => Math.max(n, p.id), 0) + 1);
     m.name = o.name || 'Untitled Map'; m.theme = o.theme || 'dungeon'; m.seed = o.seed || 'forge';
