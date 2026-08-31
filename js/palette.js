@@ -28,6 +28,7 @@ function palCommands() {
     ['room', 'Room — floor + walls', 'O'], ['edge', 'Partition — wall segments', 'K'],
     ['door', 'Door', 'D'], ['stamp', 'Prefab room', 'M'], ['prop', 'Place prop', 'P'],
     ['light', 'Light source', 'L'], ['wall', 'Solid rock', 'W'], ['erase', 'Erase objects', 'E'],
+    ['text', 'Label — write on the map', 'T'],
     ['pick', 'Sample terrain', 'I'], ['pan', 'Pan', 'H']
   ];
   for (const [tool, label, key] of TOOLS) add('Tool', label, key, () => setTool(tool), label);
@@ -37,7 +38,8 @@ function palCommands() {
     ['left', 'trace', 'Trace an existing map'], ['left', 'export', 'Export'],
     ['left', 'help', 'Shortcuts & VTT notes'],
     ['right', 'tools', 'Tool options'], ['right', 'terrain', 'Terrain palette'],
-    ['right', 'props', 'Props'], ['right', 'prefabs', 'Prefab rooms'], ['right', 'stats', 'Map info']
+    ['right', 'props', 'Props'], ['right', 'prefabs', 'Prefab rooms'],
+    ['right', 'labels', 'Labels'], ['right', 'stats', 'Map info']
   ];
   for (const [side, name, label] of PANELS)
     add('Panel', label, '', () => ensurePanel(side, name));
@@ -50,6 +52,30 @@ function palCommands() {
   add('Map', 'Undo', '⌘Z', () => undo());
   add('Map', 'Redo', '⇧⌘Z', () => redo());
   add('Map', 'Design your own prop', '', () => peOpen(null));
+
+  /* Weather is the one setting people go looking for by name — "make it rain"
+     rather than "open Appearance and scroll" — so every preset is its own
+     command and applying it also opens the panel it came from. */
+  if (typeof ATMOS_ORDER !== 'undefined')
+    for (const key of ATMOS_ORDER) {
+      const a = ATMOS[key];
+      add('Weather', key === 'none' ? 'Clear the weather' : 'Weather: ' + a.label, '', () => {
+        $('atmosPreset').value = key;
+        syncAtmosUI();
+        ensurePanel('left', 'appearance');
+        refresh(false);
+      }, a.label + ' ' + a.hint);
+    }
+
+  if (typeof GRID_TYPES !== 'undefined')
+    for (const key in GRID_TYPES)
+      add('Grid', 'Grid: ' + GRID_TYPES[key], '', () => {
+        $('gridType').value = key;
+        $('optGrid').checked = true;
+        syncGridUI();
+        ensurePanel('left', 'appearance');
+        refresh(false);
+      }, GRID_TYPES[key]);
 
   if (typeof PALETTE_ORDER !== 'undefined')
     for (const id of PALETTE_ORDER) {

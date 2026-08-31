@@ -83,11 +83,28 @@
     <section class="group" data-group="appearance">
       <h2>Appearance <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
       <label class="check"><input type="checkbox" id="optGrid" checked> Show grid</label>
+      <label class="field"><span>Grid shape</span>
+        <select id="gridType">
+          <option value="square" selected>Square — 5 ft</option>
+          <option value="hexV">Hex — pointy top</option>
+          <option value="hexH">Hex — flat top</option>
+          <option value="iso">Isometric diamond</option>
+        </select></label>
       <div class="row">
         <label class="field"><span>Grid colour</span><input type="color" id="gridColor" value="#000000"></label>
         <label class="field"><span>Opacity <b id="gridAlphaLbl">0.28</b></span>
           <input type="range" id="gridAlpha" min="0" max="1" step="0.02" value="0.28"></label>
       </div>
+      <div class="row">
+        <label class="field"><span>Line weight <b id="gridWeightLbl">1.0</b></span>
+          <input type="range" id="gridWeight" min="0.5" max="4" step="0.1" value="1"></label>
+        <label class="field"><span>Nudge X <b id="gridOffXLbl">0.00</b></span>
+          <input type="range" id="gridOffX" min="-1" max="1" step="0.02" value="0"></label>
+      </div>
+      <label class="field"><span>Nudge Y <b id="gridOffYLbl">0.00</b></span>
+        <input type="range" id="gridOffY" min="-1" max="1" step="0.02" value="0"></label>
+      <label class="check"><input type="checkbox" id="gridRelief"> Relief line — keeps the grid readable over any art</label>
+      <p class="hint" id="gridNote"></p>
       <label class="field"><span>Art style</span>
         <select id="optStyle">
           <option value="painted" selected>Painted — warm interiors, grain, graded</option>
@@ -108,6 +125,28 @@
       <p class="hint">Exports are still images, so the current shows as caustics, streaks and
         cracked crust rather than motion. The preview animates so you can aim the flow.
         Lava creeps at a fraction of the water speed, the way molten rock should.</p>
+      <div class="divider"></div>
+
+      <h3 class="subhead">Weather &amp; time of day</h3>
+      <label class="field"><span>Atmosphere</span><select id="atmosPreset"></select></label>
+      <p class="hint" id="atmosNote" style="margin-top:4px"></p>
+      <label class="field"><span>Strength <b id="atmosAmountLbl">1.00</b></span>
+        <input type="range" id="atmosAmount" min="0" max="1.5" step="0.05" value="1"></label>
+      <div class="row">
+        <label class="field"><span>Saturation <b id="atmosSatLbl">1.00</b></span>
+          <input type="range" id="atmosSat" min="0" max="2" step="0.05" value="1"></label>
+        <label class="field"><span>Contrast <b id="atmosContrastLbl">1.00</b></span>
+          <input type="range" id="atmosContrast" min="0.5" max="1.8" step="0.05" value="1"></label>
+      </div>
+      <div class="row">
+        <label class="field"><span>Warmth <b id="atmosWarmLbl">0.00</b></span>
+          <input type="range" id="atmosWarm" min="-1" max="1" step="0.05" value="0"></label>
+        <label class="field"><span>Haze <b id="atmosFadeLbl">0.00</b></span>
+          <input type="range" id="atmosFade" min="0" max="0.6" step="0.02" value="0"></label>
+      </div>
+      <p class="hint">Weather is seeded from the map, so the same storm falls in the same
+        places every time you export. It is painted into the image — a VTT that lights the
+        scene itself will still light it through the fog.</p>
       <div class="divider"></div>
 
       <label class="check"><input type="checkbox" id="optVignette" checked> Vignette</label>
@@ -189,7 +228,8 @@
       <h2>Shortcuts &amp; VTT notes <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
       <p class="hint" style="margin-top:0">
         <kbd>G</kbd> forge &nbsp; <kbd>B</kbd> paint &nbsp; <kbd>P</kbd> prop &nbsp; <kbd>D</kbd> door &nbsp;
-        <kbd>L</kbd> light &nbsp; <kbd>W</kbd> wall &nbsp; <kbd>E</kbd> erase &nbsp; <kbd>V</kbd>/<kbd>S</kbd> select &nbsp;
+        <kbd>L</kbd> light &nbsp; <kbd>W</kbd> wall &nbsp; <kbd>T</kbd> label &nbsp;
+        <kbd>E</kbd> erase &nbsp; <kbd>V</kbd>/<kbd>S</kbd> select &nbsp;
         <kbd>H</kbd> pan<br>
         <kbd>[</kbd> <kbd>]</kbd> brush size &nbsp; <kbd>⌘Z</kbd> undo &nbsp; <kbd>⇧⌘Z</kbd> redo &nbsp;
         <kbd>F</kbd> fit &nbsp; <kbd>0</kbd> 100%<br>
@@ -202,6 +242,11 @@
         re-shape it live.<br>
         <kbd>Q</kbd> <kbd>E</kbd> turn &nbsp; <kbd>+</kbd> <kbd>−</kbd> resize &nbsp;
         <kbd>⌫</kbd> delete &nbsp; <kbd>esc</kbd> deselect
+      </p>
+      <p class="hint">
+        <b>With a label selected</b>, drag to move it and edit it live in the Labels panel.
+        <kbd>Q</kbd> <kbd>E</kbd> turn &nbsp; <kbd>+</kbd> <kbd>−</kbd> resize &nbsp;
+        <kbd>D</kbd> duplicate &nbsp; <kbd>⌫</kbd> delete
       </p>
       <div class="divider"></div>
       <p class="hint" style="margin-top:0">
@@ -368,12 +413,81 @@
 
         <label class="check"><input type="checkbox" id="propSunk"> Under the water — draw below the surface</label>
         <label class="check"><input type="checkbox" id="propRandomRot" checked> Vary angle &amp; size when placing</label>
+        <label class="check"><input type="checkbox" id="propRandomFlip"> Mirror at random when placing</label>
+        <div class="divider"></div>
+        <label class="field"><span>Placing</span>
+          <select id="propPlaceMode">
+            <option value="one" selected>One per click</option>
+            <option value="many">Many — drag to lay a trail</option>
+            <option value="scatter">Scatter — drag to sow an area</option>
+          </select></label>
+        <div id="propScatterBox" style="display:none">
+          <div class="row">
+            <label class="field"><span>Area <b><span id="propAreaLbl">1.5</span> sq</b></span>
+              <input type="range" id="propArea" min="0.5" max="8" step="0.25" value="1.5"></label>
+            <label class="field"><span>Density <b id="propDensityLbl">0.5</b></span>
+              <input type="range" id="propDensity" min="0.05" max="1" step="0.05" value="0.5"></label>
+          </div>
+          <p class="hint" id="propPlaceHint" style="margin-top:2px"></p>
+        </div>
         <button id="openPropEditor" class="wide sm" style="margin-top:8px"><i data-icon="pencil"></i> Design your own prop…</button>
         <p class="hint" id="tformHint" style="margin-top:2px">
           Applies to props you place next. Switch to the <b>Select</b> tool and click a prop
           to re-shape one already on the map.
         </p>
       </div>
+    </section>
+
+    <section class="group" data-group="labels">
+      <h2>Labels <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
+      <p class="hint" id="labelHint" style="margin-top:0">Pick the Label tool and click the map to
+        write on it. Click an existing label with Select or Label to edit it.</p>
+      <label class="field"><span>Text</span>
+        <textarea id="lblText" rows="2" spellcheck="false">Label</textarea></label>
+      <div class="row">
+        <label class="field"><span>Font</span><select id="lblFont"></select></label>
+        <label class="field"><span>Size <b><span id="lblSizeLbl">1.00</span>×</b></span>
+          <input type="range" id="lblSize" min="0.2" max="8" step="0.05" value="1"></label>
+      </div>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="lblBold"> Bold</label>
+        <label class="check"><input type="checkbox" id="lblItalic"> Italic</label>
+      </div>
+      <div class="row">
+        <label class="field"><span>Colour</span><input type="color" id="lblColor" value="#f4ead6"></label>
+        <label class="field"><span>Outline</span><input type="color" id="lblOutline" value="#1a1410"></label>
+      </div>
+      <label class="field"><span>Outline width <b id="lblOutlineWLbl">0.14</b></span>
+        <input type="range" id="lblOutlineW" min="0" max="0.4" step="0.01" value="0.14"></label>
+      <label class="check"><input type="checkbox" id="lblShadow" checked> Drop shadow</label>
+      <div class="row">
+        <label class="field"><span>Tracking <b id="lblLetterLbl">0.08</b></span>
+          <input type="range" id="lblLetter" min="-0.1" max="0.6" step="0.01" value="0.08"></label>
+        <label class="field"><span>Line height <b id="lblLineHLbl">1.25</b></span>
+          <input type="range" id="lblLineH" min="0.8" max="2.5" step="0.05" value="1.25"></label>
+      </div>
+      <label class="field"><span>Alignment</span>
+        <select id="lblAlign">
+          <option value="left">Left</option>
+          <option value="center" selected>Centre</option>
+          <option value="right">Right</option>
+        </select></label>
+      <div class="row">
+        <label class="field"><span>Angle <b><span id="lblRotLbl">0</span>°</b></span>
+          <input type="range" id="lblRot" min="-180" max="180" step="1" value="0"></label>
+        <label class="field"><span>Curve <b id="lblCurveLbl">0.00</b></span>
+          <input type="range" id="lblCurve" min="-1" max="1" step="0.02" value="0"></label>
+      </div>
+      <label class="field"><span>Opacity <b id="lblOpacityLbl">1.00</b></span>
+        <input type="range" id="lblOpacity" min="0.1" max="1" step="0.05" value="1"></label>
+      <div class="row" style="margin-top:8px">
+        <button id="lblDupe" class="sm">Duplicate</button>
+        <button id="lblDelete" class="sm danger">Delete</button>
+      </div>
+      <button id="lblClear" class="wide sm" style="margin-top:6px">Remove all labels</button>
+      <p class="hint">Labels are drawn over everything, including fog and baked lighting, and
+        burn into the exported image. Curve bends the line the letters sit on — the sign
+        decides which way it bows.</p>
     </section>
 
     <section class="group" data-group="stats">
@@ -395,6 +509,7 @@
       <button data-tool="stamp" title="Prefab room (M)" aria-label="Prefab room (M)"><i data-icon="house"></i></button>
       <button data-tool="prop" title="Place prop (P)" aria-label="Place prop (P)"><i data-icon="chair"></i></button>
       <button data-tool="light" title="Light source (L)" aria-label="Light source (L)"><i data-icon="flame"></i></button>
+      <button data-tool="text" title="Label — text on the map (T)" aria-label="Label — text on the map (T)"><i data-icon="text"></i></button>
       <button data-tool="wall" title="Solid rock (W)" aria-label="Solid rock (W)"><i data-icon="bricks"></i></button>
       <button data-tool="erase" title="Erase objects (E)" aria-label="Erase objects (E)"><i data-icon="eraser"></i></button>
       <button data-tool="pick" title="Sample terrain (I)" aria-label="Sample terrain (I)"><i data-icon="pipette"></i></button>
@@ -405,6 +520,7 @@
     <button data-side="right" data-panel="terrain" title="Terrain palette" aria-label="Terrain palette"><i data-icon="grid"></i></button>
     <button data-side="right" data-panel="props" title="Props" aria-label="Props"><i data-icon="chair"></i></button>
     <button data-side="right" data-panel="prefabs" title="Prefab rooms" aria-label="Prefab rooms"><i data-icon="house"></i></button>
+    <button data-side="right" data-panel="labels" title="Labels" aria-label="Labels"><i data-icon="text"></i></button>
     <button data-side="right" data-panel="stats" title="Map info" aria-label="Map info"><i data-icon="info"></i></button>
   </nav>
 
@@ -580,6 +696,8 @@
 <script src="js/generate.js"></script>
 <script src="js/shadows.js"></script>
 <script src="js/render.js"></script>
+<script src="js/atmosphere.js"></script>
+<script src="js/labels.js"></script>
 <script src="js/exporters.js"></script>
 <script src="js/autotrace.js"></script>
 <script src="js/svgimport.js"></script>

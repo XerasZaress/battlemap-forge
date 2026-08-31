@@ -37,6 +37,7 @@ const ICONS = {
   /* --- right rail panels ------------------------------------------------ */
   sliders: '<path d="M6 21v-9M6 8V3M12 21v-5M12 12V3M18 21v-3M18 14V3"/><circle cx="6" cy="10" r="2"/><circle cx="12" cy="14" r="2"/><circle cx="18" cy="16" r="2"/>',
   grid: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
+  text: '<path d="M4 6.5V4.5h16v2"/><path d="M12 4.5v15"/><path d="M8.5 19.5h7"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11.5V16.5"/><path d="M12 8h.01"/>',
 
   /* --- actions ---------------------------------------------------------- */

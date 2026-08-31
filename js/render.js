@@ -13,6 +13,8 @@ function makeCanvas(w, h) {
 function defaultRenderOpts() {
   return {
     grid: true, gridColor: '#000000', gridAlpha: 0.28, gridWeight: 1,
+    gridType: 'square', gridOffX: 0, gridOffY: 0, gridRelief: false,
+    atmos: null, labels: true,
     lighting: true, ambient: 0.42, ambientColor: '#0a0e1e', vignette: true,
     roomLighting: true,
     water: { flow: 0.6, speed: 1, phase: 0 },   // phase drives the live animation
@@ -1379,21 +1381,104 @@ function drawSpecular(ctx, map, u, opts, shadows, propMask) {
   ctx.restore();
 }
 
-/* ---------------- grid ---------------- */
+/* ---------------- grid ----------------
+
+   A battlemap is nearly always 5 ft squares, but not always: hex is the older
+   convention for wilderness and a few systems never left it, and an isometric
+   diamond suits a map drawn in three-quarter view. All three are drawn the same
+   way — one path, stroked once — and all three key off the same grid unit, so a
+   hex is one square across the flats and an iso diamond is one square tall.
+
+   The lattice is a drawing convention, not a change to the map model: cells,
+   walls and every VTT export stay square underneath. What the hex option gives
+   you is a printed sheet, or an image for a VTT that does its own hex overlay. */
+
+const GRID_TYPES = {
+  square: 'Square',
+  hexV: 'Hex — pointy top',
+  hexH: 'Hex — flat top',
+  iso: 'Isometric diamond'
+};
+
+/** The grid as a Path2D in pixels. Kept separate from the stroking so the
+    shadow pass can re-use the same geometry rather than rebuild it. */
+function gridPath(map, u, opts) {
+  const W = map.w * u, H = map.h * u;
+  const p = new Path2D();
+  const ox = (opts.gridOffX || 0) * u, oy = (opts.gridOffY || 0) * u;
+  const type = opts.gridType || 'square';
+
+  if (type === 'square') {
+    for (let x = 0; x <= map.w; x++) { const px = Math.round(x * u + ox) + 0.5; p.moveTo(px, 0); p.lineTo(px, H); }
+    for (let y = 0; y <= map.h; y++) { const py = Math.round(y * u + oy) + 0.5; p.moveTo(0, py); p.lineTo(W, py); }
+    return p;
+  }
+
+  if (type === 'iso') {
+    // Two families of lines at slope ±1/2. Stepping the intercept by one grid
+    // square makes each diamond two squares wide and one tall, which is the
+    // ratio every isometric tileset is drawn to.
+    const lo = -W / 2 - u, hi = H + W / 2 + u;
+    for (let c = lo; c <= hi; c += u) {
+      p.moveTo(0, c + oy - ox / 2); p.lineTo(W, c + oy + (W - ox) / 2);
+      p.moveTo(0, c + oy + ox / 2); p.lineTo(W, c + oy - (W - ox) / 2);
+    }
+    return p;
+  }
+
+  // Hexes. One hex measures a grid square across its flats, so a token still
+  // covers about the same ground as it did on the square grid.
+  const pointy = type === 'hexV';
+  const R = u / Math.sqrt(3);                 // circumradius
+  const stepA = u;                            // along the row of flats
+  const stepB = R * 1.5;                      // between rows
+  const cols = Math.ceil(W / stepA) + 2, rows = Math.ceil(H / stepB) + 2;
+  const corner = (cx, cy, i) => {
+    const a = (Math.PI / 3) * i + (pointy ? -Math.PI / 2 : 0);
+    return [cx + R * Math.cos(a), cy + R * Math.sin(a)];
+  };
+  for (let b = -1; b < rows; b++) {
+    for (let a = -1; a < cols; a++) {
+      const shift = (b & 1) ? stepA / 2 : 0;
+      const cx = pointy ? a * stepA + shift + ox : b * stepB + ox;
+      const cy = pointy ? b * stepB + oy : a * stepA + shift + oy;
+      const [sx, sy] = corner(cx, cy, 0);
+      p.moveTo(sx, sy);
+      for (let i = 1; i < 6; i++) { const [px, py] = corner(cx, cy, i); p.lineTo(px, py); }
+      p.closePath();
+    }
+  }
+  return p;
+}
 
 function drawGrid(ctx, map, u, opts) {
   const W = map.w * u, H = map.h * u;
+  const path = gridPath(map, u, opts);
+  const lw = Math.max(0.5, (opts.gridWeight || 1) * u / 70);
   ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, W, H);
+  ctx.clip();                       // hexes and iso lines overshoot the map
+  ctx.lineJoin = 'round';
+  // A grid drawn in one colour disappears wherever the art happens to match it.
+  // The relief line sits a hair below and in the opposite tone, so a black grid
+  // stays readable over black rock and a white one over snow.
+  if (opts.gridRelief) {
+    const dark = hexToRgb(opts.gridColor).reduce((a, b) => a + b, 0) < 384;
+    ctx.strokeStyle = dark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
+    ctx.globalAlpha = opts.gridAlpha * 0.7;
+    ctx.lineWidth = lw;
+    ctx.save();
+    ctx.translate(lw, lw);
+    ctx.stroke(path);
+    ctx.restore();
+  }
   ctx.strokeStyle = opts.gridColor;
   ctx.globalAlpha = opts.gridAlpha;
-  ctx.lineWidth = Math.max(0.5, (opts.gridWeight || 1) * u / 70);
-  ctx.beginPath();
-  for (let x = 0; x <= map.w; x++) { const px = Math.round(x * u) + 0.5; ctx.moveTo(px, 0); ctx.lineTo(px, H); }
-  for (let y = 0; y <= map.h; y++) { const py = Math.round(y * u) + 0.5; ctx.moveTo(0, py); ctx.lineTo(W, py); }
-  ctx.stroke();
+  ctx.lineWidth = lw;
+  ctx.stroke(path);
   ctx.restore();
 }
-
 /* ---------------- top level ---------------- */
 
 function renderMap(map, optsIn) {
@@ -1428,6 +1513,11 @@ function renderMap(map, optsIn) {
     drawLighting(ctx, map, u, opts, rooms, sh, propMask);
   }
   if (opts.style === 'painted') applyPaintedStyle(ctx, map, u, opts, rooms);
+  // Weather grades and veils the scene, so it goes over the art but under the
+  // grid and the labels — both of which are notation and have to stay legible
+  // through fog.
+  drawAtmosphere(ctx, map, u, opts, seed);
   if (opts.grid) drawGrid(ctx, map, u, opts);
+  if (opts.labels !== false) drawLabels(ctx, map, u, opts);
   return cv;
 }

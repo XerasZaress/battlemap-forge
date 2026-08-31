@@ -26,6 +26,11 @@ const state = {
   propHeight: 1,
   propSunk: false,     // place the next prop below the water surface
   propVariant: 0,      // which form of a prop family to place
+  placeMode: 'one',    // 'one' | 'many' | 'scatter' — how the Prop tool lays props down
+  propArea: 1.5,       // scatter radius in grid squares
+  propDensity: 0.5,
+  selLabel: null,      // index into map.labels while a label is selected
+  labelStyle: null,    // the style the next label is written in
   snapDeg: 90,         // 0 = free rotation
   selected: null,      // index into map.props while the Select tool is active
   undo: [], redo: [],
@@ -66,6 +71,12 @@ function renderOptsFromUI(overrides) {
     grid: $('optGrid').checked,
     gridColor: $('gridColor').value,
     gridAlpha: num('gridAlpha'),
+    gridType: $('gridType').value,
+    gridWeight: num('gridWeight'),
+    gridOffX: num('gridOffX'),
+    gridOffY: num('gridOffY'),
+    gridRelief: $('gridRelief').checked,
+    atmos: atmosFromUI(),
     lighting: $('optLighting').checked,
     ambient: num('ambient'),
     ambientColor: $('ambientColor').value,
@@ -161,7 +172,9 @@ function compose() {
     drawLighting(ctx, map, u, opts, state.rooms, state.shadows, propMask);
   }
   if (opts.style === 'painted' && !state.bg.img) applyPaintedStyle(ctx, map, u, opts, state.rooms);
+  drawAtmosphere(ctx, map, u, opts, seed);
   if (opts.grid) drawGrid(ctx, map, u, opts);
+  drawLabels(ctx, map, u);
   state.cache = cv;
 }
 
@@ -264,10 +277,23 @@ function drawOverlay() {
 
   drawRoomSelection();
   drawSelection();
+  drawLabelSelection();
+
+  // scatter cursor: the disc props will be sown into
+  if (state.tool === 'prop' && state.placeMode === 'scatter' && state.hover) {
+    vctx.strokeStyle = 'rgba(201,162,39,0.85)';
+    vctx.lineWidth = 1.5;
+    vctx.setLineDash([4, 4]);
+    vctx.beginPath();
+    vctx.arc(ox + state.hover.fx * s, oy + state.hover.fy * s, state.propArea * s, 0, Math.PI * 2);
+    vctx.stroke();
+    vctx.setLineDash([]);
+    return;
+  }
 
   // brush cursor
   const hv = state.hover;
-  if (!hv || state.tool === 'pan' || state.tool === 'select') return;
+  if (!hv || state.tool === 'pan' || state.tool === 'select' || state.tool === 'text') return;
   const r = state.tool === 'brush' || state.tool === 'erase' || state.tool === 'wall' ? state.brush - 1 : 0;
   vctx.strokeStyle = 'rgba(255,255,255,0.75)';
   vctx.lineWidth = 1.5;
@@ -651,16 +677,16 @@ function undo() {
   if (!state.undo.length) return;
   state.redo.push(state.map.clone());
   state.map = state.undo.pop();
-  state.selected = null; state.selRoomId = null;
-  syncTransformUI(); syncRoomSelUI();
+  state.selected = null; state.selRoomId = null; state.selLabel = null;
+  syncTransformUI(); syncRoomSelUI(); syncLabelUI();
   refresh(true); updateUndoButtons();
 }
 function redo() {
   if (!state.redo.length) return;
   state.undo.push(state.map.clone());
   state.map = state.redo.pop();
-  state.selected = null; state.selRoomId = null;
-  syncTransformUI(); syncRoomSelUI();
+  state.selected = null; state.selRoomId = null; state.selLabel = null;
+  syncTransformUI(); syncRoomSelUI(); syncLabelUI();
   refresh(true); updateUndoButtons();
 }
 function updateUndoButtons() {
@@ -708,7 +734,16 @@ function nearestObject(fx, fy, maxDist) {
 function deleteAt(fx, fy) {
   const map = state.map;
   const hit = nearestObject(fx, fy, 0.9);
-  if (!hit) return false;
+  if (!hit) {
+    // A label's hit box is the whole run of text, which is often wide enough to
+    // cover half a room. So it is the last thing tested, not the first:
+    // erasing the barrel under "The Rusty Flagon" should get the barrel.
+    const li = pickLabel(map, fx, fy);
+    if (li == null) return false;
+    map.labels.splice(li, 1);
+    if (state.selLabel != null) { state.selLabel = null; syncLabelUI(); }
+    return true;
+  }
   if (state.selected != null) { state.selected = null; syncTransformUI(); }
   if (hit.kind === 'prop') map.props.splice(hit.index, 1);
   else if (hit.kind === 'door') map.doors.splice(hit.index, 1);
@@ -1225,12 +1260,16 @@ function placeProp(cell) {
   // a family scattered by the generator wants variety; one you place yourself
   // wants the form you picked
   const vi = def.variants ? (vary ? rnd.int(0, def.variants.length - 1) : state.propVariant) : 0;
+  // mirroring is separate from the angle: a chair turned 180° still faces the
+  // same way round, and for anything asymmetric that is the difference between
+  // a row of props and a row of copies
+  const mirror = $('propRandomFlip').checked && rnd.chance(0.5);
   map.addProp(state.prop, cell.fx, cell.fy, Object.assign({
     rot,
     scale: state.propScale * (vary ? rnd.range(0.9, 1.1) : 1),
     width: state.propWidth,
     height: state.propHeight
-  }, sunk ? { sunk: true } : null, vi ? { vi } : null));
+  }, sunk ? { sunk: true } : null, vi ? { vi } : null, mirror ? { mirror: true } : null));
   syncLightsFromProps(map);
 }
 
@@ -1238,6 +1277,298 @@ function placeLight(cell) {
   state.map.lights.push({
     x: cell.fx, y: cell.fy, range: 4, intensity: 0.9, color: '#ff9d4c', fromProp: false
   });
+}
+
+/* ---------------- atmosphere ---------------- */
+
+function atmosFromUI() {
+  return {
+    preset: $('atmosPreset').value,
+    amount: num('atmosAmount'),
+    sat: num('atmosSat'),
+    contrast: num('atmosContrast'),
+    warm: num('atmosWarm'),
+    fade: num('atmosFade')
+  };
+}
+
+function buildAtmosSelect() {
+  const sel = $('atmosPreset');
+  if (sel.options.length) return;
+  for (const key of ATMOS_ORDER) {
+    const o = document.createElement('option');
+    o.value = key; o.textContent = ATMOS[key].label;
+    sel.appendChild(o);
+  }
+}
+
+function syncAtmosUI() {
+  const a = ATMOS[$('atmosPreset').value];
+  $('atmosNote').textContent = a ? a.hint : '';
+  for (const [id, lbl, dp] of [['atmosAmount', 'atmosAmountLbl', 2], ['atmosSat', 'atmosSatLbl', 2],
+    ['atmosContrast', 'atmosContrastLbl', 2], ['atmosWarm', 'atmosWarmLbl', 2], ['atmosFade', 'atmosFadeLbl', 2]])
+    $(lbl).textContent = num(id).toFixed(dp);
+}
+
+/* ---------------- grid ---------------- */
+
+function syncGridUI() {
+  $('gridWeightLbl').textContent = num('gridWeight').toFixed(1);
+  $('gridOffXLbl').textContent = num('gridOffX').toFixed(2);
+  $('gridOffYLbl').textContent = num('gridOffY').toFixed(2);
+  const t = $('gridType').value;
+  $('gridNote').textContent = t === 'square'
+    ? ''
+    : 'Cells, walls and every VTT export stay on the square grid underneath — a '
+      + (t === 'iso' ? 'diamond' : 'hex') + ' lattice is drawn on the image only.';
+}
+
+/* ---------------- labels ----------------
+   The panel edits one thing at a time: whichever label is selected, or — with
+   nothing selected — the style the next one will be written in. That is the
+   same bargain the prop transform panel makes, and it means writing three
+   labels in the same hand takes one trip through the controls. */
+
+function labelTarget() {
+  const l = selectedLabel();
+  return l || state.labelStyle;
+}
+
+function selectedLabel() {
+  if (state.selLabel == null || !state.map) return null;
+  return state.map.labels[state.selLabel] || null;
+}
+
+function selectLabel(i) {
+  state.selLabel = i;
+  deselectProp();
+  deselectRoom();
+  syncLabelUI();
+  paint();
+}
+
+function deselectLabel() {
+  if (state.selLabel == null) return;
+  state.selLabel = null;
+  syncLabelUI();
+  paint();
+}
+
+function buildLabelPanel() {
+  const sel = $('lblFont');
+  if (sel.options.length) return;
+  for (const f of LABEL_FONTS) {
+    const o = document.createElement('option');
+    o.value = f.key; o.textContent = f.label;
+    // the option previews its own face, which is the only honest way to choose
+    o.style.fontFamily = f.stack;
+    sel.appendChild(o);
+  }
+}
+
+const LABEL_FIELDS = [
+  ['lblText', 'text', 'value'], ['lblFont', 'font', 'value'], ['lblSize', 'size', 'num'],
+  ['lblBold', 'bold', 'check'], ['lblItalic', 'italic', 'check'],
+  ['lblColor', 'color', 'value'], ['lblOutline', 'outline', 'value'],
+  ['lblOutlineW', 'outlineW', 'num'], ['lblShadow', 'shadow', 'check'],
+  ['lblLetter', 'letter', 'num'], ['lblLineH', 'lineH', 'num'],
+  ['lblAlign', 'align', 'value'], ['lblCurve', 'curve', 'num'], ['lblOpacity', 'opacity', 'num']
+];
+
+/** Panel to label. Angle is kept in radians on the label and degrees in the UI,
+    the same split the prop transform uses. */
+function applyLabelFromUI() {
+  const t = labelTarget();
+  if (!t) return;
+  for (const [id, key, kind] of LABEL_FIELDS)
+    t[key] = kind === 'num' ? num(id) : kind === 'check' ? $(id).checked : $(id).value;
+  t.rot = num('lblRot') * Math.PI / 180;
+  t._sig = null;                       // the cached measurement is now a lie
+  syncLabelUI();
+  if (selectedLabel()) refreshLabelSoon(); else paint();
+}
+
+/* A slider drag and a typed word both fire input events far faster than the map
+   can be re-composited. Coalescing to one redraw a frame is enough — the eye
+   cannot use more than that, and it keeps typing a name responsive on a map big
+   enough for compositing to be the slow part. */
+let _labelRaf = false;
+function refreshLabelSoon() {
+  if (_labelRaf) return;
+  _labelRaf = true;
+  requestAnimationFrame(() => { _labelRaf = false; refresh(false); });
+}
+
+function syncLabelUI() {
+  const l = selectedLabel();
+  const t = l || state.labelStyle;
+  if (!t) return;
+  for (const [id, key, kind] of LABEL_FIELDS) {
+    const v = t[key];
+    if (kind === 'check') $(id).checked = !!v;
+    else $(id).value = v === undefined ? '' : v;
+  }
+  $('lblRot').value = String(Math.round((t.rot || 0) * 180 / Math.PI));
+  $('lblSizeLbl').textContent = (+t.size).toFixed(2);
+  $('lblOutlineWLbl').textContent = (+t.outlineW).toFixed(2);
+  $('lblLetterLbl').textContent = (+t.letter).toFixed(2);
+  $('lblLineHLbl').textContent = (+t.lineH).toFixed(2);
+  $('lblCurveLbl').textContent = (+t.curve).toFixed(2);
+  $('lblOpacityLbl').textContent = (+t.opacity).toFixed(2);
+  $('lblRotLbl').textContent = String(Math.round((t.rot || 0) * 180 / Math.PI));
+  $('labelHint').textContent = l
+    ? 'Editing the selected label. Drag it to move, esc to deselect.'
+    : 'Pick the Label tool and click the map to write on it. These settings are what the next label will look like.';
+  $('lblDupe').disabled = !l;
+  $('lblDelete').disabled = !l;
+  if (typeof initRangeFill === 'function') initRangeFill();
+}
+
+/* Focus survives only if it is set after the pointer gesture's own focus
+   handling. `click` is the last event of that sequence, so arming a one-shot
+   listener there is the one place a focus() sticks. */
+function focusLabelTextOnClick() {
+  const grab = () => {
+    const el = $('lblText');
+    el.focus();
+    el.select();
+  };
+  view.addEventListener('click', grab, { once: true });
+  // A drag that never resolves to a click would otherwise leave the listener
+  // armed and steal focus from wherever the next click lands.
+  setTimeout(() => view.removeEventListener('click', grab), 700);
+}
+
+function placeLabel(cell) {
+  const l = Object.assign({}, state.labelStyle, { x: cell.fx, y: cell.fy });
+  delete l._sig; delete l._m;
+  state.map.labels.push(l);
+  selectLabel(state.map.labels.length - 1);
+  return l;
+}
+
+function deleteLabel() {
+  if (state.selLabel == null) return;
+  snapshot();
+  state.map.labels.splice(state.selLabel, 1);
+  state.selLabel = null;
+  syncLabelUI();
+  refresh(false);
+  toast('Label deleted — ⌘Z puts it back.');
+}
+
+function duplicateLabel() {
+  const l = selectedLabel();
+  if (!l) return;
+  snapshot();
+  const copy = JSON.parse(JSON.stringify(l));
+  delete copy._sig; delete copy._m;
+  copy.x += 0.8; copy.y += 0.8;
+  state.map.labels.push(copy);
+  selectLabel(state.map.labels.length - 1);
+  refresh(false);
+}
+
+/** A dashed box round the selected label, drawn in screen space so it stays the
+    same weight at any zoom. */
+function drawLabelSelection() {
+  const l = selectedLabel();
+  if (!l) return;
+  const s = state.workPpg * state.view.zoom;
+  const e = labelHalfExtents(l);
+  vctx.save();
+  vctx.translate(state.view.x + l.x * s, state.view.y + l.y * s);
+  vctx.rotate(l.rot || 0);
+  vctx.strokeStyle = 'rgba(201,162,39,0.95)';
+  vctx.lineWidth = 1.5;
+  vctx.setLineDash([5, 4]);
+  vctx.strokeRect((e.cx - e.hw) * s, -e.hh * s, e.hw * 2 * s, e.hh * 2 * s);
+  vctx.restore();
+}
+
+/* ---------------- scattering props ----------------
+   Inkarnate's stamp tool can lay one object, a trail of them along the drag, or
+   sow a patch. The trail and the patch are the same job at different scales:
+   pick candidate points, reject any that land on top of something already
+   there, and place what survives. Rejection rather than a grid is what keeps a
+   scattered wood from reading as an orchard. */
+
+function propSpacing() {
+  const def = PROPS[state.prop];
+  const size = (def && def.size ? def.size : 1) * (state.propScale || 1);
+  return Math.max(0.22, size * 0.55);
+}
+
+/** Props of the *same kind* within `gap` of the point.
+ *
+ * Crowding is deliberately blind to everything else on the map. Scattering
+ * undergrowth should not refuse because there is a barrel nearby — moss grows
+ * round barrels — but two oaks in the same square is always a mistake. So the
+ * rule is only ever "not another one of these here". */
+function propCrowded(x, y, gap) {
+  const g2 = gap * gap;
+  const list = state.map.props, type = state.prop;
+  for (let i = list.length - 1; i >= 0; i--) {
+    const p = list[i];
+    if (p.type !== type) continue;
+    if ((p.x - x) ** 2 + (p.y - y) ** 2 < g2) return true;
+  }
+  return false;
+}
+
+/** A ceiling, so a slow drag at full density cannot quietly grow a map into
+    something the renderer takes a minute to draw. */
+const PROP_LIMIT = 4000;
+function propRoomLeft() { return PROP_LIMIT - state.map.props.length; }
+
+/** Lay props along the segment the cursor has just travelled. `d` carries the
+    previous sample so a fast drag still leaves an even trail rather than dots
+    wherever the pointer events happened to land. */
+function trailProps(cell, d) {
+  const gap = propSpacing();
+  let n = 0;
+  const x0 = d.lastX === undefined ? cell.fx : d.lastX;
+  const y0 = d.lastY === undefined ? cell.fy : d.lastY;
+  const dist = Math.hypot(cell.fx - x0, cell.fy - y0);
+  const steps = Math.max(1, Math.min(200, Math.ceil(dist / gap)));
+  for (let i = 1; i <= steps; i++) {
+    if (propRoomLeft() <= 0) break;
+    const t = i / steps;
+    const x = lerp(x0, cell.fx, t), y = lerp(y0, cell.fy, t);
+    if (!state.map.inBounds(Math.floor(x), Math.floor(y))) continue;
+    if (propCrowded(x, y, gap * 0.85)) continue;
+    placeProp({ x: Math.floor(x), y: Math.floor(y), fx: x, fy: y });
+    n++;
+  }
+  d.lastX = cell.fx; d.lastY = cell.fy;
+  return n;
+}
+
+/** Sow the disc under the cursor.
+ *
+ * Density sets the *spacing*, not a count: at 1 the props pack as close as
+ * their own footprints allow, and thinning it pushes them apart. Doing it that
+ * way means the same slider reads the same on a barrel and on an oak, and that
+ * dragging over ground you have already sown adds nothing rather than doubling
+ * up — the rejection test sees what is already there. */
+function scatterProps(cell, d) {
+  const r = state.propArea;
+  const gap = propSpacing() / clamp(state.propDensity, 0.12, 1);
+  const capacity = Math.max(1, (Math.PI * r * r) / (gap * gap));
+  const tries = Math.min(600, Math.ceil(capacity * 3) + 4);
+  d.rnd = d.rnd || new RNG((Date.now() ^ 0x9e3779b9) >>> 0);
+  let n = 0;
+  for (let i = 0; i < tries; i++) {
+    if (propRoomLeft() <= 0) break;
+    // sqrt, or a uniform radius piles everything up in the middle
+    const a = d.rnd.range(0, Math.PI * 2), rr = Math.sqrt(d.rnd.next()) * r;
+    const x = cell.fx + Math.cos(a) * rr, y = cell.fy + Math.sin(a) * rr;
+    if (!state.map.inBounds(Math.floor(x), Math.floor(y))) continue;
+    if (propCrowded(x, y, gap)) continue;
+    placeProp({ x: Math.floor(x), y: Math.floor(y), fx: x, fy: y });
+    n++;
+  }
+  return n;
 }
 
 /* ---------------- pointer handling ---------------- */
@@ -1328,15 +1659,25 @@ view.addEventListener('pointerdown', (ev) => {
       if (hh) { beginHandleDrag(hh, screenPos(ev)); break; }
       const i = pickProp(cell.fx, cell.fy);
       if (i == null) {
-        // no furniture under the cursor — try a placed room
+        // Furniture is picked before text, because a label's hit box is the
+        // whole run and is often wide enough to cover half a room. Rooms come
+        // last, being the largest target of the three.
+        const li = pickLabel(state.map, cell.fx, cell.fy);
+        if (li != null) {
+          selectLabel(li);
+          state.drag = { mode: 'label-move', i: li, offX: state.map.labels[li].x - cell.fx, offY: state.map.labels[li].y - cell.fy };
+          break;
+        }
         const pl = placementAt(state.map, cell.x, cell.y);
         deselectProp();
+        deselectLabel();
         if (!pl) { deselectRoom(); break; }
         selectRoom(pl.id);
         state.drag = { mode: 'room-move', id: pl.id, offX: pl.x - cell.x, offY: pl.y - cell.y };
         break;
       }
       deselectRoom();
+      deselectLabel();
       selectProp(i);
       const p = state.map.props[i];
       // the undo snapshot is taken lazily on the first move, so a plain
@@ -1359,8 +1700,42 @@ view.addEventListener('pointerdown', (ev) => {
       }
       break;
     }
-    case 'prop':
-      snapshot(); placeProp(cell); refresh(false); break;
+    case 'prop': {
+      snapshot();
+      if (state.placeMode === 'scatter') {
+        state.drag = { mode: 'prop-sow', lastX: cell.fx, lastY: cell.fy };
+        if (scatterProps(cell, state.drag)) { syncLightsFromProps(state.map); refresh(false); }
+      } else if (state.placeMode === 'many') {
+        state.drag = { mode: 'prop-trail', lastX: cell.fx, lastY: cell.fy };
+        placeProp(cell);
+        refresh(false);
+      } else {
+        placeProp(cell);
+        refresh(false);
+      }
+      break;
+    }
+    case 'text': {
+      const li = pickLabel(state.map, cell.fx, cell.fy);
+      if (li != null) {
+        selectLabel(li);
+        state.drag = { mode: 'label-move', i: li, offX: state.map.labels[li].x - cell.fx, offY: state.map.labels[li].y - cell.fy };
+        break;
+      }
+      snapshot();
+      placeLabel(cell);
+      ensurePanel('right', 'labels');
+      refresh(false);
+      // The caret goes to the text box, because the first thing anyone wants
+      // after dropping a label is to type what it says. It cannot be done from
+      // here: `mousedown` runs after `pointerdown` and its default action puts
+      // focus back on the canvas, so a focus set now is undone a moment later —
+      // and then every letter typed is read as a tool shortcut instead, which
+      // means naming a room forges a new map over it. Deferred to the click,
+      // which is the last event of the gesture.
+      focusLabelTextOnClick();
+      break;
+    }
     case 'door':
       snapshot(); placeDoor(cell); refresh(true); break;
     case 'light':
@@ -1400,6 +1775,29 @@ view.addEventListener('pointermove', (ev) => {
   }
 
   if (d && d.mode === 'handle') { applyHandleDrag(screenPos(ev), ev); return; }
+
+  if (d && d.mode === 'label-move') {
+    const l = state.map.labels[d.i];
+    if (!l) return;
+    if (!d.snapped) { d.snapped = true; snapshot(); }
+    l.x = clamp(cell.fx + d.offX, 0, state.map.w);
+    l.y = clamp(cell.fy + d.offY, 0, state.map.h);
+    refresh(false);
+    return;
+  }
+  if (d && d.mode === 'prop-trail') {
+    if (trailProps(cell, d)) { syncLightsFromProps(state.map); refresh(false); }
+    return;
+  }
+  if (d && d.mode === 'prop-sow') {
+    // sow again only once the disc has moved off where it last landed, or a
+    // slow drag would empty the density slider into one spot
+    if (Math.hypot(cell.fx - d.lastX, cell.fy - d.lastY) >= state.propArea * 0.55) {
+      d.lastX = cell.fx; d.lastY = cell.fy;
+      if (scatterProps(cell, d)) { syncLightsFromProps(state.map); refresh(false); }
+    }
+    return;
+  }
 
   if (d && d.mode === 'room-move') {
     const pl = state.map.placements.find(p => p.id === d.id);
@@ -1490,7 +1888,8 @@ view.addEventListener('wheel', (ev) => {
 
 const TOOL_KEYS = {
   b: 'brush', r: 'rect', p: 'prop', d: 'door', l: 'light', w: 'wall', e: 'erase',
-  h: 'pan', i: 'pick', s: 'select', v: 'select', o: 'room', k: 'edge', m: 'stamp'
+  h: 'pan', i: 'pick', s: 'select', v: 'select', o: 'room', k: 'edge', m: 'stamp',
+  t: 'text'
 };
 
 /** Keys that act on the selected placed room. Returns true if handled. */
@@ -1507,6 +1906,32 @@ function handleRoomKey(k) {
 }
 
 /** Keys that act on the prop currently being edited. Returns true if handled. */
+/** Keys that act on the selected label. Returns true if handled. */
+function handleLabelKey(k) {
+  const l = selectedLabel();
+  if (!l) return false;
+  if (k === 'escape') { deselectLabel(); return true; }
+  if (k === 'delete' || k === 'backspace') { deleteLabel(); return true; }
+  if (k === 'q' || k === 'e') {
+    snapshot();
+    l.rot = (l.rot || 0) + (k === 'q' ? -1 : 1) * 15 * Math.PI / 180;
+    l._sig = null;
+    syncLabelUI();
+    refresh(false);
+    return true;
+  }
+  if (k === 'd') { duplicateLabel(); return true; }
+  if (k === '+' || k === '=' || k === '-' || k === '_') {
+    snapshot();
+    l.size = clamp(l.size * ((k === '-' || k === '_') ? 1 / 1.12 : 1.12), 0.2, 8);
+    l._sig = null;
+    syncLabelUI();
+    refresh(false);
+    return true;
+  }
+  return false;
+}
+
 function handleSelectionKey(k, ev) {
   const p = selectedProp();
   if (!p) return false;
@@ -1550,6 +1975,7 @@ window.addEventListener('keydown', (ev) => {
   if (ev.metaKey || ev.ctrlKey) return;
 
   if (handleRoomKey(k)) { ev.preventDefault(); return; }
+  if (handleLabelKey(k)) { ev.preventDefault(); return; }
   if (handleSelectionKey(k, ev)) { ev.preventDefault(); return; }
 
   // while stamping, R and X turn and mirror the room instead of switching tools
@@ -1784,7 +2210,7 @@ function buildRoomPanel() {
 
 const TOOL_PANEL = {
   brush: 'terrain', rect: 'terrain', room: 'terrain', wall: 'terrain',
-  prop: 'props', stamp: 'prefabs', edge: 'tools', pick: 'terrain'
+  prop: 'props', stamp: 'prefabs', edge: 'tools', pick: 'terrain', text: 'labels'
 };
 
 function setTool(tool) {
@@ -1799,6 +2225,9 @@ function setTool(tool) {
   if (tool !== 'select') {
     if (state.selected != null) { state.selected = null; syncTransformUI(); }
     if (state.selRoomId != null) { state.selRoomId = null; syncRoomSelUI(); }
+    // the Label tool keeps its own selection, since editing the thing you just
+    // wrote is the whole point of it
+    if (tool !== 'text' && state.selLabel != null) { state.selLabel = null; syncLabelUI(); }
   }
   paint();
 }
@@ -1909,7 +2338,8 @@ function updateStats() {
   const doorCount = map.doors.length + edgePortals(map).length;
   $('statsBox').innerHTML =
     `Size: <b>${map.w} × ${map.h}</b> squares (${map.w * 5} × ${map.h * 5} ft)<br>` +
-    `Props: <b>${map.props.length}</b> · Doors: <b>${doorCount}</b> · Lights: <b>${map.lights.length}</b><br>` +
+    `Props: <b>${map.props.length}</b> · Doors: <b>${doorCount}</b> · Lights: <b>${map.lights.length}</b>` +
+    (map.labels && map.labels.length ? ` · Labels: <b>${map.labels.length}</b>` : '') + '<br>' +
     `Enclosed rooms: <b>${rooms.length}</b> · Partition runs: <b>${extractEdgeWalls(map).length}</b><br>` +
     `Wall segments: <b>${segs.length}</b><br>Seed: <b>${map.seed}</b>`;
   $('expInfo').innerHTML = `Image will be <b>${px}</b>. Universal VTT and Foundry exports use the same resolution, so walls line up exactly.`;
@@ -2031,7 +2461,11 @@ function renderForExport(withGrid) {
     drawProps(ctx, map, ppg, opts);
     drawDoors(ctx, map, ppg);
     if (opts.lighting) drawLighting(ctx, map, ppg, opts);
+    // traced art gets the weather and the labels too — that is most of what
+    // makes a bought map yours
+    drawAtmosphere(ctx, map, ppg, opts, hashString(String(map.seed)) & 0xffff);
     if (withGrid) drawGrid(ctx, map, ppg, opts);
+    drawLabels(ctx, map, ppg);
     return cv;
   }
   return renderMap(map, opts);
@@ -2111,7 +2545,11 @@ function exportProject() {
       lighting: $('optLighting').checked, ambient: num('ambient'),
       ambientColor: $('ambientColor').value, vignette: $('optVignette').checked,
       roomLighting: $('optRoomLight').checked,
-      shadows: $('optShadows').checked
+      shadows: $('optShadows').checked,
+      gridType: $('gridType').value, gridWeight: num('gridWeight'),
+      gridOffX: num('gridOffX'), gridOffY: num('gridOffY'),
+      gridRelief: $('gridRelief').checked,
+      atmos: atmosFromUI()
     }
   };
   downloadText(JSON.stringify(data), safeName(state.map.name) + '.forge.json');
@@ -2143,7 +2581,24 @@ function loadProject(text) {
       $('ambient').value = a.ambient; $('ambientColor').value = a.ambientColor;
       $('optVignette').checked = a.vignette; $('optShadows').checked = a.shadows;
       if (a.roomLighting !== undefined) $('optRoomLight').checked = a.roomLighting;
+      // grid shape and weather arrived later than the first project format, so
+      // a file without them keeps the defaults rather than blanking the panel
+      if (a.gridType) $('gridType').value = a.gridType;
+      if (a.gridWeight !== undefined) $('gridWeight').value = a.gridWeight;
+      if (a.gridOffX !== undefined) $('gridOffX').value = a.gridOffX;
+      if (a.gridOffY !== undefined) $('gridOffY').value = a.gridOffY;
+      if (a.gridRelief !== undefined) $('gridRelief').checked = a.gridRelief;
+      if (a.atmos) {
+        $('atmosPreset').value = ATMOS[a.atmos.preset] ? a.atmos.preset : 'none';
+        for (const [id, key] of [['atmosAmount', 'amount'], ['atmosSat', 'sat'],
+          ['atmosContrast', 'contrast'], ['atmosWarm', 'warm'], ['atmosFade', 'fade']])
+          if (a.atmos[key] !== undefined) $(id).value = a.atmos[key];
+      }
+      syncGridUI();
+      syncAtmosUI();
     }
+    state.selLabel = null;
+    syncLabelUI();
     $('mapName').value = state.map.name;
     applyKnobSchema();
     syncSliderLabels();
@@ -2180,6 +2635,12 @@ function wire() {
   buildPropPanel();
   buildRoomPanel();
   buildFloatBar();
+  buildAtmosSelect();
+  buildLabelPanel();
+  state.labelStyle = defaultLabel();
+  syncLabelUI();
+  syncAtmosUI();
+  syncGridUI();
   peWire();
   loadCustomProps();
   loadCustomRooms();
@@ -2207,6 +2668,55 @@ function wire() {
   for (const id of ['optGrid', 'gridColor', 'gridAlpha', 'optLighting', 'ambient',
     'ambientColor', 'optVignette', 'optRoomLight', 'optStyle'])
     $(id).addEventListener('input', () => refresh(false));
+
+  // ---- grid shape ----
+  for (const id of ['gridType', 'gridWeight', 'gridOffX', 'gridOffY', 'gridRelief'])
+    $(id).addEventListener('input', () => { syncGridUI(); refresh(false); });
+
+  // ---- weather ----
+  for (const id of ['atmosPreset', 'atmosAmount', 'atmosSat', 'atmosContrast', 'atmosWarm', 'atmosFade'])
+    $(id).addEventListener('input', () => { syncAtmosUI(); refresh(false); });
+
+  // ---- labels ----
+  // one undo entry per gesture, taken before the first change of a drag
+  for (const [id] of LABEL_FIELDS)
+    $(id).addEventListener('pointerdown', () => { if (selectedLabel()) snapshot(); });
+  $('lblRot').addEventListener('pointerdown', () => { if (selectedLabel()) snapshot(); });
+  for (const [id] of LABEL_FIELDS) $(id).addEventListener('input', applyLabelFromUI);
+  $('lblRot').addEventListener('input', applyLabelFromUI);
+  // typing is its own gesture: one snapshot when the box is first focused
+  $('lblText').addEventListener('focus', () => { if (selectedLabel()) snapshot(); });
+  $('lblDupe').addEventListener('click', duplicateLabel);
+  $('lblDelete').addEventListener('click', deleteLabel);
+  $('lblClear').addEventListener('click', () => {
+    if (!state.map || !state.map.labels.length) { toast('There are no labels to remove.', 2600); return; }
+    snapshot();
+    const n = state.map.labels.length;
+    state.map.labels = [];
+    state.selLabel = null;
+    syncLabelUI();
+    refresh(false);
+    toast('Removed ' + n + ' label' + (n === 1 ? '' : 's') + ' — ⌘Z puts them back.');
+  });
+
+  // ---- how props land ----
+  $('propPlaceMode').addEventListener('change', () => {
+    state.placeMode = $('propPlaceMode').value;
+    $('propScatterBox').style.display = state.placeMode === 'one' ? 'none' : '';
+    $('propPlaceHint').textContent = state.placeMode === 'scatter'
+      ? 'Drag to sow the disc. Props never land on top of each other, so density above what the area holds simply fills it.'
+      : 'Drag to lay an even trail. Spacing follows the prop’s own footprint and scale.';
+    paint();
+  });
+  for (const id of ['propArea', 'propDensity']) {
+    $(id).addEventListener('input', () => {
+      state.propArea = num('propArea');
+      state.propDensity = num('propDensity');
+      $('propAreaLbl').textContent = state.propArea.toFixed(2).replace(/0$/, '');
+      $('propDensityLbl').textContent = state.propDensity.toFixed(2);
+      paint();
+    });
+  }
 
   $('autoWall').addEventListener('click', () => {
     snapshot();
