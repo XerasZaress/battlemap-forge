@@ -615,6 +615,62 @@ label.field.knob-off { display: none; }
 
 .divider { height: 1px; background: var(--line); margin: var(--s3) 0; }
 
+/* ---------- reference lists (help panel) ----------
+
+   The help panel used to be prose with hard breaks, so every key ran into the
+   next and the wrap point moved with the panel width. It is reference material,
+   so it wants the shape of reference material: short labelled groups, and one
+   fact per line with the keys in a column you can run your eye down.
+
+   The key column is `max-content`, so it sizes itself to the widest chord in
+   its own group and every description in that group starts at the same x. */
+
+/* The micro-heading itself is the one already defined for the prop editor,
+   further down; these groups only need air above them, so that the gap
+   between groups reads as three times the gap between rows. */
+section[data-group="help"] .subhead { margin-top: var(--s5); }
+section[data-group="help"] .subhead:first-of-type { margin-top: 0; }
+
+.keylist {
+  display: grid; grid-template-columns: max-content 1fr;
+  column-gap: var(--s3); row-gap: var(--s2);
+  margin: 0; padding: 0; list-style: none;
+  font-size: var(--fs-xs); color: var(--text);
+}
+/* two facing pairs, for groups whose keys are all single letters */
+.keylist.two { grid-template-columns: max-content 1fr max-content 1fr; column-gap: var(--s2); }
+
+/* The row is only a grouping for the reader; the grid does the aligning, so
+   each li hands its two cells straight to the parent grid. */
+.keylist li { display: contents; }
+.keylist .k {
+  display: flex; gap: var(--s1); justify-content: flex-start; align-items: center;
+}
+.keylist li > span:last-child { align-self: center; }
+
+.notelist {
+  margin: 0; padding: 0; list-style: none;
+  font-size: var(--fs-xs); color: var(--muted); line-height: 1.5;
+}
+.notelist li { position: relative; padding-left: var(--s3); }
+.notelist li + li { margin-top: var(--s2); }
+/* A hairline dash rather than a bullet: quieter, and it lines the items up
+   with the key column above without competing with the kbd caps. */
+.notelist li::before {
+  content: ""; position: absolute; left: 0; top: .62em;
+  width: 6px; height: 1px; background: currentColor; opacity: .5;
+}
+.notelist b { color: var(--text); font-weight: 600; }
+/* Each VTT gets its name on its own line, so the four platforms read as four
+   entries you can find rather than one wall of instructions. */
+.notelist.vtt b { display: block; letter-spacing: .01em; margin-bottom: 2px; }
+.notelist code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .92em; color: var(--text);
+  background: var(--surface-2); border-radius: var(--r-xs); padding: 0 3px;
+}
+.notelist.vtt li + li { margin-top: var(--s3); }
+
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {

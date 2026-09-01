@@ -1897,7 +1897,7 @@ function handleRoomKey(k) {
   const pl = selectedRoom();
   if (!pl) return false;
   if (k === 'escape') { deselectRoom(); return true; }
-  if (k === 'r' || k === 'e') { mutateRoom({ rot: (pl.rot + 1) % 4 }); return true; }
+  if (k === 'e') { mutateRoom({ rot: (pl.rot + 1) % 4 }); return true; }
   if (k === 'q') { mutateRoom({ rot: (pl.rot + 3) % 4 }); return true; }
   if (k === 'x') { mutateRoom({ flip: !pl.flip }); return true; }
   if (k === 'd') { duplicateRoom(); return true; }
@@ -1978,8 +1978,8 @@ window.addEventListener('keydown', (ev) => {
   if (handleLabelKey(k)) { ev.preventDefault(); return; }
   if (handleSelectionKey(k, ev)) { ev.preventDefault(); return; }
 
-  // while stamping, R and X turn and mirror the room instead of switching tools
-  if (state.tool === 'stamp' && (k === 'r' || k === 'x' || k === 'q' || k === 'e')) {
+  // while stamping, Q/E and X turn and mirror the room instead of switching tools
+  if (state.tool === 'stamp' && (k === 'x' || k === 'q' || k === 'e')) {
     ev.preventDefault();
     if (k === 'x') flipRoom();
     else rotateRoom(k === 'q' ? -1 : 1);

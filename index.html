@@ -226,38 +226,103 @@
 
     <section class="group" data-group="help">
       <h2>Shortcuts &amp; VTT notes <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
-      <p class="hint" style="margin-top:0">
-        <kbd>G</kbd> forge &nbsp; <kbd>B</kbd> paint &nbsp; <kbd>P</kbd> prop &nbsp; <kbd>D</kbd> door &nbsp;
-        <kbd>L</kbd> light &nbsp; <kbd>W</kbd> wall &nbsp; <kbd>T</kbd> label &nbsp;
-        <kbd>E</kbd> erase &nbsp; <kbd>V</kbd>/<kbd>S</kbd> select &nbsp;
-        <kbd>H</kbd> pan<br>
-        <kbd>[</kbd> <kbd>]</kbd> brush size &nbsp; <kbd>⌘Z</kbd> undo &nbsp; <kbd>⇧⌘Z</kbd> redo &nbsp;
-        <kbd>F</kbd> fit &nbsp; <kbd>0</kbd> 100%<br>
-        Right-click or <kbd>alt</kbd>-click deletes the prop, door or light under the cursor.
-        Middle-drag or space-drag pans.
-      </p>
-      <p class="hint">
-        <b>With the Select tool</b>, click a prop to pick it up, then drag to move it.
-        <kbd>shift</kbd>-drag turns it, <kbd>alt</kbd>-drag resizes it, and the sliders
-        re-shape it live.<br>
-        <kbd>Q</kbd> <kbd>E</kbd> turn &nbsp; <kbd>+</kbd> <kbd>−</kbd> resize &nbsp;
-        <kbd>⌫</kbd> delete &nbsp; <kbd>esc</kbd> deselect
-      </p>
-      <p class="hint">
-        <b>With a label selected</b>, drag to move it and edit it live in the Labels panel.
-        <kbd>Q</kbd> <kbd>E</kbd> turn &nbsp; <kbd>+</kbd> <kbd>−</kbd> resize &nbsp;
-        <kbd>D</kbd> duplicate &nbsp; <kbd>⌫</kbd> delete
-      </p>
+
+      <h3 class="subhead">Tools</h3>
+      <ul class="keylist two" role="list">
+        <li role="listitem"><span class="k"><kbd>V</kbd><kbd>S</kbd></span><span>select</span></li>
+        <li role="listitem"><span class="k"><kbd>B</kbd></span><span>paint</span></li>
+        <li role="listitem"><span class="k"><kbd>R</kbd></span><span>rectangle</span></li>
+        <li role="listitem"><span class="k"><kbd>O</kbd></span><span>room</span></li>
+        <li role="listitem"><span class="k"><kbd>K</kbd></span><span>partition</span></li>
+        <li role="listitem"><span class="k"><kbd>D</kbd></span><span>door</span></li>
+        <li role="listitem"><span class="k"><kbd>M</kbd></span><span>prefab</span></li>
+        <li role="listitem"><span class="k"><kbd>P</kbd></span><span>prop</span></li>
+        <li role="listitem"><span class="k"><kbd>L</kbd></span><span>light</span></li>
+        <li role="listitem"><span class="k"><kbd>T</kbd></span><span>label</span></li>
+        <li role="listitem"><span class="k"><kbd>W</kbd></span><span>solid rock</span></li>
+        <li role="listitem"><span class="k"><kbd>E</kbd></span><span>erase</span></li>
+        <li role="listitem"><span class="k"><kbd>I</kbd></span><span>sample</span></li>
+        <li role="listitem"><span class="k"><kbd>H</kbd></span><span>pan</span></li>
+      </ul>
+      <p class="hint">With something selected, <kbd>D</kbd> and <kbd>E</kbd> act on the
+        selection instead of switching tools.</p>
+
+      <h3 class="subhead">Tool options</h3>
+      <ul class="keylist" role="list">
+        <li role="listitem"><span class="k"><kbd>[</kbd><kbd>]</kbd></span><span>brush size</span></li>
+        <li role="listitem"><span class="k"><kbd>C</kbd></span><span>next prop variant</span></li>
+        <li role="listitem"><span class="k"><kbd>⇧C</kbd></span><span>previous variant</span></li>
+      </ul>
+
+      <h3 class="subhead">Map &amp; view</h3>
+      <ul class="keylist" role="list">
+        <li role="listitem"><span class="k"><kbd>G</kbd></span><span>forge a new map</span></li>
+        <li role="listitem"><span class="k"><kbd>F</kbd></span><span>fit to screen</span></li>
+        <li role="listitem"><span class="k"><kbd>0</kbd></span><span>zoom to 100%</span></li>
+        <li role="listitem"><span class="k"><kbd>⌘Z</kbd></span><span>undo</span></li>
+        <li role="listitem"><span class="k"><kbd>⇧⌘Z</kbd></span><span>redo</span></li>
+      </ul>
+
+      <h3 class="subhead">Mouse</h3>
+      <ul class="notelist" role="list">
+        <li>Click a prop with the <b>Select</b> tool to pick it up, then drag to move it.</li>
+        <li><kbd>shift</kbd>-drag to turn it, <kbd>alt</kbd>-drag to resize it.</li>
+        <li>Right-click or <kbd>alt</kbd>-click deletes the prop, door or light under the cursor.</li>
+        <li>Middle-drag or space-drag pans the map.</li>
+      </ul>
+
+      <h3 class="subhead">Selected prop</h3>
+      <ul class="keylist" role="list">
+        <li role="listitem"><span class="k"><kbd>Q</kbd><kbd>E</kbd></span><span>turn</span></li>
+        <li role="listitem"><span class="k"><kbd>+</kbd><kbd>−</kbd></span><span>resize</span></li>
+        <li role="listitem"><span class="k"><kbd>⌫</kbd></span><span>delete</span></li>
+        <li role="listitem"><span class="k"><kbd>esc</kbd></span><span>deselect</span></li>
+      </ul>
+      <p class="hint">The sliders re-shape a selected prop live.</p>
+
+      <h3 class="subhead">Selected room</h3>
+      <ul class="keylist" role="list">
+        <li role="listitem"><span class="k"><kbd>Q</kbd><kbd>E</kbd></span><span>turn</span></li>
+        <li role="listitem"><span class="k"><kbd>X</kbd></span><span>mirror</span></li>
+        <li role="listitem"><span class="k"><kbd>D</kbd></span><span>duplicate</span></li>
+        <li role="listitem"><span class="k"><kbd>⌫</kbd></span><span>delete</span></li>
+        <li role="listitem"><span class="k"><kbd>esc</kbd></span><span>deselect</span></li>
+      </ul>
+      <p class="hint">The same keys turn and mirror a prefab while you are placing it.</p>
+
+      <h3 class="subhead">Selected label</h3>
+      <ul class="keylist" role="list">
+        <li role="listitem"><span class="k"><kbd>Q</kbd><kbd>E</kbd></span><span>turn</span></li>
+        <li role="listitem"><span class="k"><kbd>+</kbd><kbd>−</kbd></span><span>resize</span></li>
+        <li role="listitem"><span class="k"><kbd>D</kbd></span><span>duplicate</span></li>
+        <li role="listitem"><span class="k"><kbd>⌫</kbd></span><span>delete</span></li>
+        <li role="listitem"><span class="k"><kbd>esc</kbd></span><span>deselect</span></li>
+      </ul>
+      <p class="hint">Drag to move it, and edit it live in the Labels panel.</p>
+
       <div class="divider"></div>
-      <p class="hint" style="margin-top:0">
-        <b>Roll20 / Owlbear / Alchemy:</b> upload the PNG. Set the scene to
-        <span id="helpDims">30 × 22</span> squares.<br>
-        <b>Foundry:</b> drop the PNG in your world's <code>Data</code> folder, then import the
-        scene JSON — walls, doors and lights come with it. Or use the Universal VTT file with the
-        <i>Universal Battlemap Importer</i> module.<br>
-        <b>Fantasy Grounds Unity:</b> import the <code>.dd2vtt</code> directly (Import &gt; Universal VTT).<br>
-        <b>Arkenforge / Dungeon Alchemist users:</b> the <code>.dd2vtt</code> is the same format.
-      </p>
+
+      <h3 class="subhead">Taking the map to a VTT</h3>
+      <ul class="notelist vtt" role="list">
+        <li>
+          <b>Roll20 / Owlbear / Alchemy</b>
+          Upload the PNG. Set the scene to <span id="helpDims">30 × 22</span> squares.
+        </li>
+        <li>
+          <b>Foundry</b>
+          Drop the PNG in your world's <code>Data</code> folder, then import the scene
+          JSON — walls, doors and lights come with it. Or use the Universal VTT file
+          with the <i>Universal Battlemap Importer</i> module.
+        </li>
+        <li>
+          <b>Fantasy Grounds Unity</b>
+          Import the <code>.dd2vtt</code> directly (Import &gt; Universal VTT).
+        </li>
+        <li>
+          <b>Arkenforge / Dungeon Alchemist</b>
+          The <code>.dd2vtt</code> is the same format.
+        </li>
+      </ul>
     </section>
   </aside>
 
