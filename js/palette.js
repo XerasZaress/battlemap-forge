@@ -39,10 +39,26 @@ function palCommands() {
     ['left', 'help', 'Shortcuts & VTT notes'],
     ['right', 'tools', 'Tool options'], ['right', 'terrain', 'Terrain palette'],
     ['right', 'props', 'Props'], ['right', 'prefabs', 'Prefab rooms'],
-    ['right', 'labels', 'Labels'], ['right', 'stats', 'Map info']
+    ['right', 'labels', 'Labels'], ['right', 'layers', 'Layers'], ['right', 'stats', 'Map info']
   ];
   for (const [side, name, label] of PANELS)
     add('Panel', label, '', () => ensurePanel(side, name));
+
+  /* One row per layer, so "hide the props" is two keystrokes and a click
+     rather than a hunt through a panel that may not even be open. */
+  if (state.map && state.map.layers) {
+    for (const L of state.map.layers) {
+      add('Layer', (L.visible ? 'Hide' : 'Show') + ' layer: ' + L.name, '',
+        () => { ensurePanel('right', 'layers'); toggleLayerVisible(L.id); }, L.name + ' visibility');
+    }
+    add('Layer', 'Add an object layer', '', () => {
+      ensurePanel('right', 'layers');
+      snapshot();
+      const L = addObjectLayer(state.map, null, layEditing);
+      if (L) { layEditing = L.id; setActiveLayer(L.id, true); buildLayerPanel(true); refresh(false); }
+      else toast('That is as deep as the stack goes.');
+    });
+  }
 
   add('Map', 'Forge a new map', 'G', () => generate());
   add('Map', 'Fit map to screen', 'F', () => fitView());

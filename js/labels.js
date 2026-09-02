@@ -136,9 +136,14 @@ function labelHit(l, fx, fy) {
 }
 
 /** Topmost label under the point, or null. Later labels sit over earlier ones. */
-function pickLabel(map, fx, fy) {
+/* `editableOnly` keeps the cursor off labels on a hidden or locked layer, the
+   same rule the props follow. Drawing ignores it: a locked layer still shows. */
+function pickLabel(map, fx, fy, editableOnly) {
   const list = map.labels || [];
-  for (let i = list.length - 1; i >= 0; i--) if (labelHit(list[i], fx, fy)) return i;
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (editableOnly && !objEditable(map, list[i])) continue;
+    if (labelHit(list[i], fx, fy)) return i;
+  }
   return null;
 }
 
@@ -246,5 +251,5 @@ function drawLabel(ctx, l, u) {
 function drawLabels(ctx, map, u) {
   const list = map.labels;
   if (!list || !list.length) return;
-  for (const l of list) drawLabel(ctx, l, u);
+  for (const l of list) if (objVisible(map, l)) drawLabel(ctx, l, u);
 }

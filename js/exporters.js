@@ -74,6 +74,9 @@ function extractWalls(map, opts) {
     for (const p of map.props) {
       const def = PROPS[p.type];
       if (!def || !def.blocks) continue;
+      // a prop on a hidden layer is not on the map: it blocks nothing, which is
+      // what makes hiding a layer a real way to export a players' copy
+      if (!objVisible(map, p)) continue;
       // footprint follows the prop's own rotation, scale and stretch
       const sc = p.scale === undefined ? 1 : p.scale;
       const wd = p.width === undefined ? 1 : p.width;

@@ -850,8 +850,9 @@ function propIsSunk(map, p) {
  * them, and veiled in the colour of that liquid so depth reads — a chest under
  * deep water should not look like a chest sitting on it.
  */
-function drawSunkProps(ctx, map, u, opts) {
-  const sunk = map.props.filter(p => PROPS[p.type] && propIsSunk(map, p));
+function drawSunkProps(ctx, map, u, opts, list) {
+  const from = list || map.props;
+  const sunk = from.filter(p => PROPS[p.type] && propIsSunk(map, p));
   if (!sunk.length) return;
   // one veil pass per liquid, rather than one canvas per prop
   const groups = new Map();
@@ -1479,6 +1480,142 @@ function drawGrid(ctx, map, u, opts) {
   ctx.stroke(path);
   ctx.restore();
 }
+/* ---------------- the layer stack ----------------
+   The order things are drawn in is data now, not a script: renderMap and the
+   editor's compose() both walk map.layers from the bottom up and ask each layer
+   to contribute. See js/layers.js for what the two kinds of layer are and why
+   they take different controls. */
+
+/* An additive layer paints onto its own sheet, which is then composited — the
+   only way opacity and a blend mode can mean anything. A layer that is fully
+   opaque and blending normally draws straight through instead, because that is
+   the overwhelmingly common case and a scratch canvas per layer per frame is
+   not free. */
+function compositeLayer(ctx, map, u, L, draw) {
+  const plain = L.opacity >= 0.999 && (!L.blend || L.blend === 'normal');
+  if (plain) { draw(ctx); return null; }
+  const cv = makeCanvas(map.w * u, map.h * u);
+  draw(cv.getContext('2d'));
+  ctx.save();
+  ctx.globalAlpha = clamp(L.opacity, 0, 1);
+  if (L.blend && L.blend !== 'normal') ctx.globalCompositeOperation = L.blend;
+  ctx.drawImage(cv, 0, 0);
+  ctx.restore();
+  return cv;
+}
+
+/* A filter layer has no pixels of its own; it reads what is beneath and changes
+   it. Opacity is therefore a cross-fade back to the image as it was, which is
+   what makes half the weather look like half the weather rather than a faint
+   copy of the whole of it laid on top. */
+function filterLayer(ctx, map, u, L, apply) {
+  const a = clamp(L.opacity, 0, 1);
+  if (a <= 0.001) return;
+  if (a >= 0.999) { apply(ctx); return; }
+  const before = makeCanvas(map.w * u, map.h * u);
+  before.getContext('2d').drawImage(ctx.canvas, 0, 0);
+  apply(ctx);
+  ctx.save();
+  ctx.globalAlpha = 1 - a;
+  ctx.drawImage(before, 0, 0);
+  ctx.restore();
+}
+
+/* The ground and everything built into it. Sunk props are drawn here, between
+   the floor and the water over it, because that sandwich is what makes them
+   read as under the surface — but only the ones whose own layer is showing, so
+   hiding a layer still takes its props with it. */
+function drawTerrainLayer(ctx, map, u, opts, seed, env) {
+  if (env.terrain) {
+    ctx.drawImage(env.terrain, 0, 0);
+  } else if (env.bgImage) {
+    // traced art is placed by its own grid size and offset, which only the
+    // editor knows; a caller without that hook gets the plain stretch
+    if (env.drawBg) env.drawBg(ctx, map, u);
+    else {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(env.bgImage, 0, 0, map.w * u, map.h * u);
+    }
+  } else {
+    drawBase(ctx, map, u, opts, seed);
+    drawTileDetail(ctx, map, u, seed, roomIndexMap(map, env.rooms), opts.water && opts.water.flow);
+    drawWalls(ctx, map, u, opts, seed);
+  }
+  drawSunkProps(ctx, map, u, opts, visibleProps(map));
+  if (!env.bgImage) {
+    drawWaterFlow(ctx, map, u, env.liquidOpts || opts, env.waterPath);
+    drawLavaFlow(ctx, map, u, env.liquidOpts || opts, env.lavaPath);
+  }
+  if (env.bgImage) { if (env.traceOverlay) env.traceOverlay(ctx, map, u); }
+  else drawEdgeWalls(ctx, map, u, opts, seed);
+  // doors are architecture and belong with the walls they hang in; they also go
+  // into the mask, so the water sheen does not wash across a door leaf
+  if (opts.doors !== false) {
+    drawDoors(ctx, map, u);
+    drawDoors(env.propMask.getContext('2d'), map, u);
+  }
+}
+
+/* Props first, then the labels of the same layer over them. The props also go
+   into the running mask of things standing on the floor, which is what stops
+   the light pooling and the water sheen washing over them; labels do not,
+   because a label is writing on the map, not an object casting anything. */
+function drawObjectLayer(ctx, map, u, opts, L, env) {
+  const props = map.props.filter(p => p.lay === L.id && !propIsSunk(map, p));
+  const labels = (map.labels || []).filter(l => l.lay === L.id);
+  if (props.length) {
+    const sheet = compositeLayer(ctx, map, u, L, (c) => drawPropList(c, map, u, opts, props));
+    const mc = env.propMask.getContext('2d');
+    if (sheet) {
+      mc.save(); mc.globalAlpha = clamp(L.opacity, 0, 1); mc.drawImage(sheet, 0, 0); mc.restore();
+    } else {
+      drawPropList(mc, map, u, opts, props);
+    }
+  }
+  if (labels.length) compositeLayer(ctx, map, u, L, (c) => { for (const l of labels) drawLabel(c, l, u); });
+}
+
+/** Walk the stack. `env` carries what the editor already has cached — a
+    pre-rendered terrain canvas, the liquid paths, the shadow polygons — so the
+    same walk serves the editor's incremental compose and a cold export. */
+function drawLayerStack(ctx, map, u, opts, seed, envIn) {
+  ensureLayers(map);
+  const env = Object.assign({ rooms: null, shadows: null }, envIn || {});
+  if (!env.rooms) env.rooms = findRooms(map);
+  env.propMask = makeCanvas(map.w * u, map.h * u);
+
+  for (const L of map.layers) {
+    if (!L.visible) continue;
+    switch (L.kind) {
+      case 'terrain':
+        drawTerrainLayer(ctx, map, u, opts, seed, env);
+        break;
+      case 'objects':
+        drawObjectLayer(ctx, map, u, opts, L, env);
+        break;
+      case 'lighting': {
+        if (opts.lighting === false) break;
+        const sh = env.shadows || computeLightShadows(map).polys;
+        filterLayer(ctx, map, u, L, (c) => drawLighting(c, map, u, opts, env.rooms, sh, env.propMask));
+        break;
+      }
+      case 'finish':
+        if (opts.style !== 'painted' || env.bgImage) break;
+        filterLayer(ctx, map, u, L, (c) => applyPaintedStyle(c, map, u, opts, env.rooms));
+        break;
+      case 'atmos':
+        filterLayer(ctx, map, u, L, (c) => drawAtmosphere(c, map, u, opts, seed));
+        break;
+      case 'grid':
+        if (opts.grid === false) break;
+        compositeLayer(ctx, map, u, L, (c) => drawGrid(c, map, u, opts));
+        break;
+    }
+  }
+  return ctx.canvas;
+}
+
 /* ---------------- top level ---------------- */
 
 function renderMap(map, optsIn) {
@@ -1487,37 +1624,6 @@ function renderMap(map, optsIn) {
   const cv = makeCanvas(map.w * u, map.h * u);
   const ctx = cv.getContext('2d');
   const seed = hashString(String(map.seed)) & 0xffff;
-
-  const rooms = findRooms(map);
-  if (opts.bgImage) {
-    ctx.drawImage(opts.bgImage, 0, 0, map.w * u, map.h * u);
-  } else {
-    drawBase(ctx, map, u, opts, seed);
-    drawTileDetail(ctx, map, u, seed, roomIndexMap(map, rooms), opts.water && opts.water.flow);
-    if (opts.props) drawSunkProps(ctx, map, u, opts);
-    drawWaterFlow(ctx, map, u, opts);
-    drawLavaFlow(ctx, map, u, opts);
-    drawWalls(ctx, map, u, opts, seed);
-  }
-  drawEdgeWalls(ctx, map, u, opts, seed);
-  let propMask = null;
-  if (opts.props || opts.doors) {
-    propMask = makeCanvas(map.w * u, map.h * u);
-    const pc = propMask.getContext('2d');
-    if (opts.props) drawProps(pc, map, u, opts);
-    if (opts.doors) drawDoors(pc, map, u);
-    ctx.drawImage(propMask, 0, 0);
-  }
-  if (opts.lighting) {
-    const sh = opts.shadows2 || computeLightShadows(map).polys;
-    drawLighting(ctx, map, u, opts, rooms, sh, propMask);
-  }
-  if (opts.style === 'painted') applyPaintedStyle(ctx, map, u, opts, rooms);
-  // Weather grades and veils the scene, so it goes over the art but under the
-  // grid and the labels — both of which are notation and have to stay legible
-  // through fog.
-  drawAtmosphere(ctx, map, u, opts, seed);
-  if (opts.grid) drawGrid(ctx, map, u, opts);
-  if (opts.labels !== false) drawLabels(ctx, map, u, opts);
+  drawLayerStack(ctx, map, u, opts, seed, { rooms: findRooms(map), bgImage: opts.bgImage || null });
   return cv;
 }

@@ -166,6 +166,9 @@ class GameMap {
     this.extraWalls = [];     // manual LOS segments in grid units [x1,y1,x2,y2]
     this.labels = [];         // text placed on the map; see labels.js
     this.placements = [];     // live prefab instances; see rooms.js
+    this.layers = [];         // the draw stack, bottom first; see layers.js
+    this.nextLid = 1;
+    this.curLay = 0;          // layer new props land on; 0 means the default
     this.nextPid = 1;
     this.name = 'Untitled Map';
     this.theme = 'dungeon';
@@ -238,6 +241,10 @@ class GameMap {
       own x-axis, so a table can be made long without becoming fat. */
   addProp(type, x, y, opts) {
     const p = Object.assign({ type, x, y, rot: 0, scale: 1, width: 1, height: 1 }, opts || {});
+    // One choke point for which layer a prop lands on, so the generators, the
+    // prefab stamper, duplication and the Prop tool all obey the same setting
+    // without each having to remember to.
+    if (p.lay === undefined) p.lay = this.curLay || DEFAULT_PROP_LAYER;
     // A prop that draws itself with its seeded rng — rubble, foliage, a broken
     // barrel — must keep the same roll for life, or dragging it re-rolls its
     // shape under the cursor. Derived from the map seed and the order props
@@ -256,6 +263,8 @@ class GameMap {
     m.extraWalls = JSON.parse(JSON.stringify(this.extraWalls));
     m.labels = JSON.parse(JSON.stringify(this.labels));
     m.placements = JSON.parse(JSON.stringify(this.placements));
+    m.layers = JSON.parse(JSON.stringify(this.layers));
+    m.nextLid = this.nextLid; m.curLay = this.curLay;
     m.nextPid = this.nextPid;
     m.name = this.name; m.theme = this.theme; m.seed = this.seed;
     return m;
@@ -273,7 +282,8 @@ class GameMap {
         for (const k in l) if (k.charAt(0) !== '_') o[k] = l[k];
         return o;
       }),
-      placements: this.placements, nextPid: this.nextPid
+      placements: this.placements, nextPid: this.nextPid,
+      layers: this.layers, nextLid: this.nextLid, curLay: this.curLay
     };
   }
   static deserialize(o) {
@@ -286,6 +296,10 @@ class GameMap {
     m.lights = o.lights || []; m.extraWalls = o.extraWalls || [];
     m.labels = o.labels || [];
     m.placements = o.placements || [];
+    // v2 projects predate the stack; ensureLayers gives them the default one
+    m.layers = o.layers || [];
+    m.nextLid = o.nextLid || 0;
+    m.curLay = o.curLay || 0;
     m.nextPid = o.nextPid || (m.placements.reduce((n, p) => Math.max(n, p.id), 0) + 1);
     m.name = o.name || 'Untitled Map'; m.theme = o.theme || 'dungeon'; m.seed = o.seed || 'forge';
     return m;

@@ -1032,7 +1032,8 @@ function syncLightsFromProps(map) {
   map.lights = map.lights.filter(l => !l.fromProp);
   for (const pr of map.props) {
     const def = PROPS[pr.type];
-    if (def && def.light) {
+    // a torch on a hidden layer lights nothing, in the editor or in the export
+    if (def && def.light && objVisible(map, pr)) {
       // a prop may override the colour, reach and strength of its own light,
       // so one torch can burn green and the next orange
       map.lights.push({

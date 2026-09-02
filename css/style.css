@@ -467,6 +467,64 @@ button.danger:hover {
 .propcell { aspect-ratio: 1; display: block; padding: 2px; }
 .propcell canvas { width: 100%; height: 100%; display: block; border-radius: var(--r-xs); }
 
+/* ---------- layer stack ---------- */
+
+.layerlist {
+  display: flex; flex-direction: column; gap: 2px;
+  border: 1px solid var(--line-strong); border-radius: var(--r-md);
+  padding: 3px; background: var(--surface-2);
+}
+.layerrow {
+  display: flex; align-items: center; gap: var(--s1);
+  padding: 5px 4px; border-radius: var(--r-sm);
+  cursor: pointer; user-select: none; position: relative;
+  border: 1px solid transparent;
+}
+.layerrow:hover { background: var(--surface-3); }
+.layerrow.editing { border-color: var(--accent-dim); background: var(--accent-wash); }
+/* the layer new work lands on, marked down the leading edge rather than with
+   another badge — the row is already carrying three controls */
+.layerrow.active::before {
+  content: ''; position: absolute; left: -3px; top: 4px; bottom: 4px;
+  width: 3px; border-radius: 2px; background: var(--accent);
+}
+.layerrow.hidden .layname { opacity: .42; }
+.layerrow.pinned { cursor: default; }
+.layerrow:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+/* touch dragging a row must not also scroll the panel under it */
+.layerrow:not(.pinned) { touch-action: none; }
+.layerrow.dragging { opacity: .4; }
+.layerrow.dropbefore { box-shadow: 0 -2px 0 var(--accent); }
+.layerrow.dropafter { box-shadow: 0 2px 0 var(--accent); }
+
+.layname {
+  flex: 1 1 auto; display: flex; align-items: center; gap: var(--s2);
+  min-width: 0; font-size: var(--fs-sm);
+}
+.layname b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.layname em { font-style: normal; color: var(--muted); font-size: var(--fs-xs); flex: 0 0 auto; }
+.layname svg { flex: 0 0 auto; width: 14px; height: 14px; opacity: .7; }
+
+.laytoggle {
+  flex: 0 0 auto; width: 24px; height: 24px; padding: 0;
+  display: grid; place-items: center;
+  background: none; border: none; color: var(--muted); border-radius: var(--r-xs);
+}
+.laytoggle:hover:not(:disabled) { background: var(--surface-4); color: var(--text); }
+.laytoggle.on { color: var(--accent); }
+.laytoggle:disabled { opacity: .25; }
+.laytoggle svg { width: 15px; height: 15px; }
+
+.layerbox {
+  display: none; margin-top: var(--s3);
+  background: var(--surface-2); border: 1px solid var(--accent-dim);
+  border-radius: var(--r-md); padding: var(--s3);
+  box-shadow: inset 0 1px 0 var(--bevel), 0 0 0 3px var(--accent-wash);
+}
+.layerbox.on { display: block; }
+.layerbox .tformhead { color: var(--accent); }
+.layerbox .tformhead button { padding: 2px 6px; }
+
 /* ---------- selection panels ---------- */
 
 .transform.editing, .roomsel {

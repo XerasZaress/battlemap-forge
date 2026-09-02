@@ -31,6 +31,11 @@ const state = {
   propDensity: 0.5,
   selLabel: null,      // index into map.labels while a label is selected
   labelStyle: null,    // the style the next label is written in
+  // Which layer new work lands on, kept per kind of object rather than as one
+  // pointer: dropping a barrel and writing a name are different jobs and people
+  // keep them on different layers, so one shared "active layer" would have you
+  // re-picking it every time you changed tool.
+  activeLay: { prop: 0, label: 0 },
   snapDeg: 90,         // 0 = free rotation
   selected: null,      // index into map.props while the Select tool is active
   undo: [], redo: [],
@@ -145,23 +150,6 @@ function compose() {
   const seed = hashString(String(map.seed)) & 0xffff;
   const cv = makeCanvas(map.w * u, map.h * u);
   const ctx = cv.getContext('2d');
-  ctx.drawImage(state.terrain, 0, 0);
-  // caustics sit on the water but under everything standing on it, otherwise
-  // a table over a pool looks submerged — props the user has actually sunk go
-  // the other side of them, which is what makes them read as under the surface
-  const liquidOpts = { water: { flow: num('waterFlow'), speed: num('waterSpeed'), phase: state.waterPhase } };
-  drawSunkProps(ctx, map, u, opts);
-  if (state.waterPath) drawWaterFlow(ctx, map, u, liquidOpts, state.waterPath);
-  if (state.lavaPath) drawLavaFlow(ctx, map, u, liquidOpts, state.lavaPath);
-  if (state.bg.img) drawTraceOverlay(ctx, map, u);
-  else drawEdgeWalls(ctx, map, u, opts, seed);
-  // one prop render, used both as the visible layer and as the mask that keeps
-  // the water sheen from washing over anything standing on it
-  const propMask = makeCanvas(map.w * u, map.h * u);
-  const pc = propMask.getContext('2d');
-  drawProps(pc, map, u, opts);
-  drawDoors(pc, map, u);
-  ctx.drawImage(propMask, 0, 0);
 
   if (opts.lighting) {
     const sig = lightSignature(map);
@@ -169,12 +157,21 @@ function compose() {
       state.shadows = computeLightShadows(map).polys;
       state.shadowSig = sig;
     }
-    drawLighting(ctx, map, u, opts, state.rooms, state.shadows, propMask);
   }
-  if (opts.style === 'painted' && !state.bg.img) applyPaintedStyle(ctx, map, u, opts, state.rooms);
-  drawAtmosphere(ctx, map, u, opts, seed);
-  if (opts.grid) drawGrid(ctx, map, u, opts);
-  drawLabels(ctx, map, u);
+  // the editor hands the walk what it already has: the terrain rendered once
+  // and kept until something under the props changes, and the liquid paths that
+  // let the caustics animate without touching the rest of the stack
+  drawLayerStack(ctx, map, u, opts, seed, {
+    rooms: state.rooms,
+    shadows: state.shadows,
+    terrain: state.terrain,
+    // the cached terrain already carries the traced art and its red overlay,
+    // so the flag is all the walk needs — it must not draw either of them again
+    bgImage: state.bg.img || null,
+    waterPath: state.waterPath,
+    lavaPath: state.lavaPath,
+    liquidOpts: { water: { flow: num('waterFlow'), speed: num('waterSpeed'), phase: state.waterPhase } }
+  });
   state.cache = cv;
 }
 
@@ -187,6 +184,7 @@ function refresh(full) {
   if (state.waterPath || state.lavaPath) startWaterAnimation(); else stopWaterAnimation();
   if (!rafPending) { rafPending = true; requestAnimationFrame(() => { rafPending = false; paint(); }); }
   updateStats();
+  buildLayerPanel();
 }
 
 function paint() {
@@ -716,16 +714,19 @@ function applyPaint(cell, mat) {
 function nearestObject(fx, fy, maxDist) {
   const map = state.map;
   let best = null, bd = maxDist * maxDist;
-  const test = (list, kind) => {
+  // `skip` rather than a filtered list, because the index returned is spliced
+  // out of the real array by the caller and must stay an index into it
+  const test = (list, kind, skip) => {
     for (let i = 0; i < list.length; i++) {
       const o = list[i];
+      if (skip && skip(o)) continue;
       const ox = kind === 'prop' || kind === 'light' ? o.x : o.x + 0.5;
       const oy = kind === 'prop' || kind === 'light' ? o.y : o.y + 0.5;
       const d = (ox - fx) ** 2 + (oy - fy) ** 2;
       if (d < bd) { bd = d; best = { kind, index: i }; }
     }
   };
-  test(map.props, 'prop');
+  test(map.props, 'prop', p => !objEditable(map, p));
   test(map.doors, 'door');
   test(map.lights.filter(l => !l.fromProp), 'light');
   return best;
@@ -738,7 +739,7 @@ function deleteAt(fx, fy) {
     // A label's hit box is the whole run of text, which is often wide enough to
     // cover half a room. So it is the last thing tested, not the first:
     // erasing the barrel under "The Rusty Flagon" should get the barrel.
-    const li = pickLabel(map, fx, fy);
+    const li = pickLabel(map, fx, fy, true);
     if (li == null) return false;
     map.labels.splice(li, 1);
     if (state.selLabel != null) { state.selLabel = null; syncLabelUI(); }
@@ -1053,7 +1054,9 @@ function propHalfExtents(p) {
 
 /** Topmost prop whose oriented box contains the point. */
 function pickProp(fx, fy) {
-  const list = state.map.props.map((p, i) => ({ p, i }));
+  // a prop on a hidden or locked layer is not there as far as the cursor is
+  // concerned, which is the whole reason to lock a layer of undergrowth
+  const list = state.map.props.map((p, i) => ({ p, i })).filter(e => objEditable(state.map, e.p));
   list.sort((a, b) => {
     const ua = PROPS[a.p.type] && PROPS[a.p.type].under ? 0 : 1;
     const ub = PROPS[b.p.type] && PROPS[b.p.type].under ? 0 : 1;
@@ -1440,7 +1443,7 @@ function focusLabelTextOnClick() {
 }
 
 function placeLabel(cell) {
-  const l = Object.assign({}, state.labelStyle, { x: cell.fx, y: cell.fy });
+  const l = Object.assign({}, state.labelStyle, { x: cell.fx, y: cell.fy, lay: activeLayerId('label') });
   delete l._sig; delete l._m;
   state.map.labels.push(l);
   selectLabel(state.map.labels.length - 1);
@@ -1662,7 +1665,7 @@ view.addEventListener('pointerdown', (ev) => {
         // Furniture is picked before text, because a label's hit box is the
         // whole run and is often wide enough to cover half a room. Rooms come
         // last, being the largest target of the three.
-        const li = pickLabel(state.map, cell.fx, cell.fy);
+        const li = pickLabel(state.map, cell.fx, cell.fy, true);
         if (li != null) {
           selectLabel(li);
           state.drag = { mode: 'label-move', i: li, offX: state.map.labels[li].x - cell.fx, offY: state.map.labels[li].y - cell.fy };
@@ -1716,7 +1719,7 @@ view.addEventListener('pointerdown', (ev) => {
       break;
     }
     case 'text': {
-      const li = pickLabel(state.map, cell.fx, cell.fy);
+      const li = pickLabel(state.map, cell.fx, cell.fy, true);
       if (li != null) {
         selectLabel(li);
         state.drag = { mode: 'label-move', i: li, offX: state.map.labels[li].x - cell.fx, offY: state.map.labels[li].y - cell.fy };
@@ -2005,6 +2008,383 @@ window.addEventListener('resize', () => {
   paint();
 });
 
+/* ---------------- the layer stack ----------------
+   The panel reads top-down, the way a stack of sheets on a desk does, while
+   map.layers is stored bottom-first in drawing order. Every index that crosses
+   between the two gets flipped, and the flip lives here so nothing else has to
+   think about it. */
+
+function activeLayerId(kind) {
+  const map = state.map;
+  if (!map) return 0;
+  ensureLayers(map);
+  const want = state.activeLay[kind];
+  const L = layerById(map, want);
+  if (L && L.kind === 'objects' && L.visible && !L.locked) return L.id;
+  // fall back to the layer that kind is shipped on, then to anything usable
+  const home = layerById(map, kind === 'label' ? DEFAULT_LABEL_LAYER : DEFAULT_PROP_LAYER);
+  const usable = (x) => x && x.visible && !x.locked;
+  const pick = usable(home) ? home : objectLayers(map).find(usable) || objectLayers(map)[0];
+  state.activeLay[kind] = pick.id;
+  return pick.id;
+}
+
+/** Which kind of object the current tool makes, so the panel can highlight the
+    layer that tool is about to write to rather than a single global one. */
+function activeLayerKind() { return state.tool === 'text' ? 'label' : 'prop'; }
+
+/* Clicking a row claims it for the tool in hand. `both` is for a layer the user
+   has just made on purpose: they want to work in it whatever they pick up next,
+   and having the note they write land on some other layer because the Text tool
+   still points at the old one is the kind of thing nobody forgives twice. */
+function setActiveLayer(id, both) {
+  const L = layerById(state.map, id);
+  if (!L || L.kind !== 'objects') return;
+  if (both) { state.activeLay.prop = id; state.activeLay.label = id; }
+  else state.activeLay[activeLayerKind()] = id;
+  state.map.curLay = activeLayerId('prop');
+  buildLayerPanel();
+}
+
+let layEditing = null;   // id of the layer whose settings are open
+let layerSig = null;
+
+/* Called from refresh, so it runs on every drag frame. Rebuilding a dozen rows
+   that often is wasteful and it makes the drag-to-reorder let go, so the DOM is
+   only touched when something the panel actually shows has changed. */
+function layerPanelSig(map, activeId) {
+  const parts = [activeId, layEditing];
+  for (const L of map.layers) {
+    const c = L.kind === 'objects' ? layerCounts(map, L.id).total : 0;
+    parts.push(L.id, L.kind, L.name, L.visible ? 1 : 0, L.locked ? 1 : 0, c);
+  }
+  return parts.join('|');
+}
+
+function buildLayerPanel(force) {
+  const map = state.map;
+  const host = $('layerList');
+  if (!map || !host) return;
+  ensureLayers(map);
+  map.curLay = activeLayerId('prop');
+  const activeId = activeLayerId(activeLayerKind());
+  if (layEditing != null && !layerById(map, layEditing)) layEditing = null;
+  const sig = layerPanelSig(map, activeId);
+  if (!force && sig === layerSig) { syncLayerBox(); return; }
+  layerSig = sig;
+  host.textContent = '';
+
+  // top of the stack first
+  for (let i = map.layers.length - 1; i >= 0; i--) {
+    const L = map.layers[i];
+    const kind = LAYER_KINDS[L.kind];
+    const row = document.createElement('div');
+    row.className = 'layerrow';
+    row.dataset.id = L.id;
+    if (L.id === layEditing) row.classList.add('editing');
+    if (L.kind === 'objects' && L.id === activeId) row.classList.add('active');
+    if (!L.visible) row.classList.add('hidden');
+    if (kind.pinned) row.classList.add('pinned');
+    if (!kind.pinned) {
+      row.tabIndex = 0;
+      row.setAttribute('role', 'button');
+      row.setAttribute('aria-label', L.name + ' layer. Alt with the arrow keys moves it.');
+      row.addEventListener('keydown', (ev) => layerRowKey(ev, L.id));
+    }
+
+    const eye = document.createElement('button');
+    eye.className = 'laytoggle';
+    eye.innerHTML = '<i data-icon="' + (L.visible ? 'eye' : 'eyeoff') + '"></i>';
+    eye.title = L.visible ? 'Hide this layer' : 'Show this layer';
+    eye.addEventListener('click', (ev) => { ev.stopPropagation(); toggleLayerVisible(L.id); });
+
+    const name = document.createElement('span');
+    name.className = 'layname';
+    const counts = layerCounts(map, L.id);
+    name.innerHTML = '<i data-icon="' + kind.icon + '"></i><b>' + escapeHtml(L.name) + '</b>' +
+      (L.kind === 'objects' ? '<em>' + counts.total + '</em>' : '');
+
+    const lock = document.createElement('button');
+    lock.className = 'laytoggle' + (L.locked ? ' on' : '');
+    lock.innerHTML = '<i data-icon="' + (L.locked ? 'lock' : 'unlock') + '"></i>';
+    lock.title = L.locked ? 'Unlock this layer' : 'Lock this layer so the cursor ignores it';
+    lock.disabled = kind.pinned && L.kind !== 'terrain';
+    lock.addEventListener('click', (ev) => { ev.stopPropagation(); toggleLayerLocked(L.id); });
+
+    row.append(eye, name, lock);
+    row.addEventListener('click', () => {
+      layEditing = L.id;
+      if (L.kind === 'objects') setActiveLayer(L.id); else buildLayerPanel();
+      syncLayerBox();
+    });
+    host.appendChild(row);
+  }
+  wireLayerDrag(host);
+  renderIcons(host);
+  syncLayerBox();
+  $('layAdd').disabled = map.layers.length >= LAYER_MAX;
+}
+
+function escapeHtml(t) {
+  return String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+/* The three toggles that are also Appearance checkboxes drive the checkbox as
+   well, so the two places that show the same fact can never disagree. */
+const LAYER_MIRROR = { lighting: 'optLighting', grid: 'optGrid' };
+
+function toggleLayerVisible(id) {
+  const L = layerById(state.map, id);
+  if (!L) return;
+  snapshot();
+  L.visible = !L.visible;
+  const box = LAYER_MIRROR[L.kind];
+  if (box) $(box).checked = L.visible;
+  // a hidden layer's torches stop burning, so the light list has to be rebuilt
+  syncLightsFromProps(state.map);
+  buildLayerPanel();
+  refresh(true);
+}
+
+function toggleLayerLocked(id) {
+  const L = layerById(state.map, id);
+  if (!L) return;
+  L.locked = !L.locked;
+  if (L.locked) {
+    // nothing on a locked layer should stay selected, or its handles would
+    // still be draggable on a layer that is meant to be out of the way
+    if (state.selected != null && state.map.props[state.selected] &&
+        state.map.props[state.selected].lay === id) deselectProp();
+    if (state.selLabel != null && state.map.labels[state.selLabel] &&
+        state.map.labels[state.selLabel].lay === id) deselectLabel();
+  }
+  buildLayerPanel();
+  paint();
+}
+
+function syncLayerBox() {
+  const box = $('layerBox');
+  const L = layEditing == null ? null : layerById(state.map, layEditing);
+  box.classList.toggle('on', !!L);
+  if (!L) return;
+  const kind = LAYER_KINDS[L.kind];
+  $('layEditName').textContent = L.name;
+  $('layName').value = L.name;
+  $('layName').disabled = kind.unique;
+  $('layOpacity').value = L.opacity;
+  $('layOpacityLbl').textContent = Math.round(L.opacity * 100) + '%';
+  $('layBlend').value = L.blend || 'normal';
+  // blend has no meaning for a layer that has no pixels of its own, and the
+  // terrain has nothing beneath it to blend with
+  const canBlend = !kind.filter && L.kind !== 'terrain';
+  $('layBlendField').style.display = canBlend ? '' : 'none';
+  $('layDelete').disabled = kind.pinned ||
+    (L.kind === 'objects' && objectLayers(state.map).length <= 1);
+  $('layMerge').disabled = L.kind !== 'objects';
+  $('laySelMove').disabled = L.kind !== 'objects' || (state.selected == null && state.selLabel == null);
+  $('layBlurb').textContent = kind.filter
+    ? kind.blurb + ' Opacity is how strong it is.'
+    : kind.blurb;
+}
+
+function applyLayerEdits() {
+  const L = layEditing == null ? null : layerById(state.map, layEditing);
+  if (!L) return;
+  const kind = LAYER_KINDS[L.kind];
+  if (!kind.unique) L.name = $('layName').value.trim() || L.name;
+  L.opacity = num('layOpacity');
+  L.blend = $('layBlend').value;
+  $('layOpacityLbl').textContent = Math.round(L.opacity * 100) + '%';
+  $('layEditName').textContent = L.name;
+  buildLayerPanel();
+  refresh(false);
+}
+
+/** Move the selected prop or label onto the layer whose settings are open. */
+function moveSelectionToLayer() {
+  const L = layEditing == null ? null : layerById(state.map, layEditing);
+  if (!L || L.kind !== 'objects') return;
+  const o = state.selected != null ? state.map.props[state.selected]
+    : state.selLabel != null ? state.map.labels[state.selLabel] : null;
+  if (!o) return;
+  snapshot();
+  o.lay = L.id;
+  syncLightsFromProps(state.map);
+  buildLayerPanel();
+  refresh(false);
+  toast('Moved to ' + L.name + '.');
+}
+
+/** Show only this layer, or put everything back if it is already the only one
+    showing — the same key people expect from an image editor. */
+function soloLayer() {
+  const map = state.map;
+  if (layEditing == null) return;
+  snapshot();
+  const others = map.layers.filter(L => L.id !== layEditing);
+  const alone = others.every(L => !L.visible);
+  for (const L of others) L.visible = alone;
+  const target = layerById(map, layEditing);
+  if (target) target.visible = true;
+  for (const kind in LAYER_MIRROR) {
+    const L = layerOfKind(map, kind);
+    if (L) $(LAYER_MIRROR[kind]).checked = L.visible;
+  }
+  syncLightsFromProps(map);
+  buildLayerPanel();
+  refresh(true);
+}
+
+/* Rows are dragged rather than nudged with arrows, because a stack is a spatial
+   thing and people already know how to reorder one. Pointer events rather than
+   HTML5 drag-and-drop: the same code then serves mouse and touch, the drop
+   indicator is ours to draw, and — the part that decides it — a row can also be
+   moved from the keyboard, which native dragging has never offered. The terrain
+   refuses both to move and to be dropped past, so it stays the floor. */
+function wireLayerDrag(host) {
+  let drag = null;
+
+  const rowAt = (clientY) => {
+    for (const r of host.querySelectorAll('.layerrow')) {
+      const b = r.getBoundingClientRect();
+      if (clientY >= b.top && clientY <= b.bottom) return { row: r, above: clientY < b.top + b.height / 2 };
+    }
+    return null;
+  };
+  const clearMarks = () => {
+    for (const r of host.querySelectorAll('.layerrow')) r.classList.remove('dropbefore', 'dropafter');
+  };
+
+  host.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0) return;
+    const row = ev.target.closest('.layerrow');
+    if (!row || row.classList.contains('pinned')) return;
+    if (ev.target.closest('.laytoggle')) return;   // the eye and the lock are not handles
+    drag = { id: parseInt(row.dataset.id, 10), row, y0: ev.clientY, moved: false };
+  });
+
+  host.addEventListener('pointermove', (ev) => {
+    if (!drag) return;
+    // a few pixels of slop, so a click that wobbles still reads as a click
+    if (!drag.moved) {
+      if (Math.abs(ev.clientY - drag.y0) < 4) return;
+      drag.moved = true;
+      drag.row.classList.add('dragging');
+      host.setPointerCapture(ev.pointerId);
+    }
+    clearMarks();
+    const hit = rowAt(ev.clientY);
+    if (hit && !hit.row.classList.contains('pinned')) {
+      hit.row.classList.add(hit.above ? 'dropbefore' : 'dropafter');
+    }
+  });
+
+  const finish = (ev) => {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    clearMarks();
+    d.row.classList.remove('dragging');
+    if (host.hasPointerCapture && host.hasPointerCapture(ev.pointerId)) host.releasePointerCapture(ev.pointerId);
+    if (!d.moved) return;
+    // a drag is not a click; the row must not also become the active layer
+    host.addEventListener('click', (e) => e.stopPropagation(), { capture: true, once: true });
+    const hit = rowAt(ev.clientY);
+    if (!hit || hit.row.classList.contains('pinned')) return;
+    const overId = parseInt(hit.row.dataset.id, 10);
+    if (overId === d.id) return;
+    dropLayer(d.id, overId, hit.above);
+  };
+  host.addEventListener('pointerup', finish);
+  host.addEventListener('pointercancel', finish);
+}
+
+/** Put `id` next to `overId`. `above` is above *in the panel*, which is higher
+    in the stack, because the list is drawn top-down over an array stored
+    bottom-up. */
+function dropLayer(id, overId, above) {
+  const map = state.map;
+  snapshot();
+  const from = layerIndex(map, id);
+  let to = layerIndex(map, overId) + (above ? 1 : 0);
+  if (from < to) to--;
+  if (!reorderLayer(map, id, to)) { state.undo.pop(); updateUndoButtons(); return; }
+  buildLayerPanel(true);
+  refresh(false);
+}
+
+/** Alt with the arrow keys moves the focused row, which is the only way to
+    reorder the stack without a pointer. */
+function layerRowKey(ev, id) {
+  const dir = ev.key === 'ArrowUp' ? 1 : ev.key === 'ArrowDown' ? -1 : 0;
+  if (dir && ev.altKey) {
+    ev.preventDefault();
+    snapshot();
+    if (!moveLayer(state.map, id, dir)) { state.undo.pop(); updateUndoButtons(); return; }
+    buildLayerPanel(true);
+    refresh(false);
+    // the row moved out from under the focus ring; put it back on the same layer
+    const again = document.querySelector('.layerrow[data-id="' + id + '"]');
+    if (again) again.focus();
+    return;
+  }
+  if (dir) {
+    ev.preventDefault();
+    const rows = [...document.querySelectorAll('.layerrow')];
+    const i = rows.findIndex(r => parseInt(r.dataset.id, 10) === id);
+    const next = rows[i + (dir > 0 ? -1 : 1)];
+    if (next) next.focus();
+    return;
+  }
+  if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ev.currentTarget.click(); }
+}
+
+function setupLayerPanel() {
+  const sel = $('layBlend');
+  for (const b of LAYER_BLENDS) {
+    const o = document.createElement('option');
+    o.value = b.key; o.textContent = b.label;
+    sel.appendChild(o);
+  }
+  $('layName').addEventListener('input', applyLayerEdits);
+  $('layOpacity').addEventListener('input', applyLayerEdits);
+  sel.addEventListener('change', applyLayerEdits);
+  $('layAdd').addEventListener('click', () => {
+    snapshot();
+    const L = addObjectLayer(state.map, null, layEditing);
+    if (!L) { toast('That is as deep as the stack goes.'); return; }
+    layEditing = L.id;
+    setActiveLayer(L.id, true);
+    buildLayerPanel(true);
+    refresh(false);
+  });
+  $('layMerge').addEventListener('click', () => {
+    if (layEditing == null) return;
+    snapshot();
+    const into = mergeLayerDown(state.map, layEditing);
+    if (!into) { toast('There is no object layer below this one.'); return; }
+    layEditing = into.id;
+    buildLayerPanel();
+    refresh(false);
+  });
+  $('layDelete').addEventListener('click', () => {
+    if (layEditing == null) return;
+    const L = layerById(state.map, layEditing);
+    if (!L) return;
+    const n = layerCounts(state.map, L.id).total;
+    if (n && !confirm('Delete "' + L.name + '" and the ' + n + ' thing' + (n === 1 ? '' : 's') + ' on it?')) return;
+    snapshot();
+    deselectProp(); deselectLabel();
+    if (!removeLayer(state.map, L.id)) { toast('That layer cannot be deleted.'); return; }
+    layEditing = null;
+    syncLightsFromProps(state.map);
+    buildLayerPanel();
+    refresh(true);
+  });
+  $('laySelMove').addEventListener('click', moveSelectionToLayer);
+  $('layIsolate').addEventListener('click', soloLayer);
+}
+
 /* ---------------- panel construction ---------------- */
 
 function buildTypeSelect() {
@@ -2229,6 +2609,9 @@ function setTool(tool) {
     // wrote is the whole point of it
     if (tool !== 'text' && state.selLabel != null) { state.selLabel = null; syncLabelUI(); }
   }
+  // the Text tool writes to a different layer than the Prop tool, so the row
+  // marked as the one receiving new work has to follow the tool
+  if (changed) buildLayerPanel();
   paint();
 }
 
@@ -2451,24 +2834,16 @@ function renderForExport(withGrid) {
     return null;
   }
   const opts = renderOptsFromUI({ grid: withGrid, ppg });
-  if (state.bg.img) {
-    const cv = makeCanvas(map.w * ppg, map.h * ppg);
-    const ctx = cv.getContext('2d');
-    drawBackgroundImage(ctx, map, ppg);
-    // traced art has no water layer of ours to sink under, but the props are
-    // still the user's and must not vanish from the export
-    drawSunkProps(ctx, map, ppg, opts);
-    drawProps(ctx, map, ppg, opts);
-    drawDoors(ctx, map, ppg);
-    if (opts.lighting) drawLighting(ctx, map, ppg, opts);
-    // traced art gets the weather and the labels too — that is most of what
-    // makes a bought map yours
-    drawAtmosphere(ctx, map, ppg, opts, hashString(String(map.seed)) & 0xffff);
-    if (withGrid) drawGrid(ctx, map, ppg, opts);
-    drawLabels(ctx, map, ppg);
-    return cv;
-  }
-  return renderMap(map, opts);
+  const cv = makeCanvas(map.w * ppg, map.h * ppg);
+  const ctx = cv.getContext('2d');
+  // a cold walk: no cached terrain, and no red tracing overlay, which is an
+  // editing aid and has no business in the picture anybody else sees
+  drawLayerStack(ctx, map, ppg, opts, hashString(String(map.seed)) & 0xffff, {
+    rooms: state.rooms,
+    bgImage: state.bg.img || null,
+    drawBg: state.bg.img ? drawBackgroundImage : null
+  });
+  return cv;
 }
 
 const IMAGE_FORMATS = {
@@ -2935,6 +3310,18 @@ function wire() {
       if (state.bg.img) applyBgGrid();
     });
   }
+  // these two boxes and the eyes in the Layers panel show the same fact, so
+  // each writes the other rather than letting them drift apart
+  for (const kind in LAYER_MIRROR) {
+    $(LAYER_MIRROR[kind]).addEventListener('change', () => {
+      const L = state.map && layerOfKind(state.map, kind);
+      if (!L) return;
+      L.visible = $(LAYER_MIRROR[kind]).checked;
+      syncLightsFromProps(state.map);
+      buildLayerPanel();
+    });
+  }
+
   $('traceSens').addEventListener('input', () => { $('traceSensLbl').textContent = $('traceSens').value; });
 
   $('autoTraceBtn').addEventListener('click', () => {
@@ -2979,6 +3366,7 @@ function wire() {
     toast('Background image removed.');
   });
 
+  setupLayerPanel();
   applyKnobSchema();
   syncSliderLabels();
   setBrush(1);
@@ -2989,3 +3377,4 @@ function wire() {
 
 wire();
 generate();
+buildLayerPanel();
