@@ -517,9 +517,9 @@ or **Select**, to edit it; drag it to move it.
 With nothing selected the panel sets what the *next* label will look like, so writing three
 in the same hand takes one trip through the controls.
 
-Labels ship on their own layer at the top of the stack, so they draw over everything —
-fog, baked lighting, the grid — and burn into the exported image. Move that layer down if
-you would rather the weather closed over them. `Q`/`E` turn a selected label, `+`/`−`
+Labels are objects like any other: they live on the **Objects** layer, are lit and
+weathered along with everything else on it, and burn into the exported image. Put them on
+a layer above the *Light & weather* row if you want them to stay untouched by both. `Q`/`E` turn a selected label, `+`/`−`
 resize it, `D` duplicates, `⌫` deletes, `esc` deselects. The Erase tool and right-click
 remove one too.
 
@@ -531,63 +531,72 @@ Everything the renderer draws used to happen in one fixed order. That order is r
 of the time, which is why it lasted, and wrong in exactly the places people care about.
 So it is data now: the **Layers** panel is the stack, and the renderer walks it.
 
-A new map ships with seven layers, listed top of the stack first:
+A new map ships with four layers, listed top of the stack first:
 
 | | |
 |---|---|
-| **Labels** | An object layer, above everything, which is where the Label tool writes |
 | **Grid** | The lattice |
-| **Weather** | The colour grade and whatever is falling out of the sky |
-| **Painted finish** | The paper grain and the warm/cool wash |
-| **Lighting** | Baked light and shadow |
-| **Props** | An object layer, below the lighting so its contents are lit by it |
+| **Light & weather** | Baked light, the painted finish and the weather, in that order |
+| **Objects** | Everything you place — props and labels |
 | **Terrain** | The floor, walls, water and doors |
+
+Four rows, one for each thing that is genuinely a layer. Light, the painted finish and the
+weather share a row because each already has its own strength slider under Appearance —
+a per-row opacity would have been a third way to say the same thing — and because nobody
+reorders them separately. What that row is for is its **position**: everything below it is
+lit and weathered, everything above it escapes all three. Want GM notes that stay legible
+through fog? Put them on a layer above that row.
 
 Drag a row to move it, or focus one and hold `alt` with the arrow keys. Click a row to make
 it the layer new work lands on — marked with a gold bar down its leading edge. The Prop
 tool and the Label tool each remember their own, so switching tool doesn't make you
-re-pick.
+re-pick. **Terrain is pinned to the bottom**; it can still be hidden.
 
-**Terrain is pinned to the bottom.** It is the ground the map stands on, and a stack that
-lets you put the floor above the furniture is not offering a choice anyone wanted. It can
-still be hidden.
-
-### What the two kinds of layer can do
-
-**Object layers** hold props and labels. They paint their own pixels, so they take an
-opacity *and* a blend mode — multiply, screen, overlay, soft light, darken, lighten. Add
-as many as you like, merge one down into the one below, or delete one and everything on
-it. **Move selection here** sends the selected prop or label to the open layer.
-
-**Filter layers** — Lighting, Painted finish, Weather — have no pixels of their own; they
-read what is beneath them and change it. Blend mode means nothing for those, so it isn't
-offered. Opacity means *strength*, and it is done by cross-fading back to the image as it
-was, so half the weather looks like half the weather rather than a faint copy of all of it
-laid on top.
-
-The Grid is an ordinary additive layer, so it takes both.
+**Object layers** hold props and labels, and take an opacity *and* a blend mode — multiply,
+screen, overlay, soft light, darken, lighten. Add as many as you like, merge one down into
+the one below, or delete one and everything on it. **Move selection here** sends the
+selected prop or label to the open layer. **Solo** shows only that layer.
 
 ### Hiding a layer takes it out of the map
 
 Not just out of the picture. A hidden layer's props stop blocking line of sight and its
 torches stop giving light — in the editor, in the Universal VTT walls, and in the Foundry
 scene. That is the point: put the traps, the secret doors and the GM's notes on their own
-layer, and you have two exports off one map. Hide it for the copy the players get, show it
-for yours.
+layer, and you have two exports off one map.
 
-**Solo** shows only the open layer and hides the rest; press it again to put everything
-back.
-
-### Locking
-
-A locked layer is still drawn, but the cursor goes straight through it. Lock the
+**Locking** leaves a layer drawn but lets the cursor straight through it. Lock the
 undergrowth you scattered and it stops grabbing the pointer while you place the ambush.
-Anything selected on a layer is deselected when you lock it, so its handles can't be
-dragged either.
 
-The stack is saved in the project file. A project made before layers existed opens with
-the default stack, its props on **Props** and its labels on **Labels**, so it looks exactly
-as it did.
+---
+
+## The Objects panel
+
+A layer holds things; the **Objects** panel is the list of them — one row per prop and per
+label on the layer you have open, with a thumbnail and a name. Once a wood has thirty trees
+in it, the one behind the rock is findable in a list and not on the map.
+
+- **Click a row** to select that object. It becomes the live selection on the map, with its
+  handles and toolbar, and the view scrolls to it if it was off screen.
+- **The eye** hides one object — and like a hidden layer, a hidden object stops blocking
+  sight and stops giving light.
+- **The padlock** leaves it drawn but takes it out of the cursor's reach.
+- **Search** narrows the list by name, and the two header buttons hide or lock everything
+  the list is currently showing — so searching `torch` and pressing the padlock locks the
+  torches and nothing else.
+
+### Sublayer
+
+Selecting an object gives it a **Sublayer** — a number from −9 to 9 deciding which of two
+things sitting in the same place is on top. Higher is nearer the viewer. It exists because
+a whole layer is a heavy instrument for getting one rug under one table.
+
+Objects that share a sublayer keep the order they always had — flat things under standing
+things, nearer things last — so the number is only consulted when you have actually set
+one, and setting it on a rug doesn't disturb how everything else was already arranged.
+
+The stack, the per-object flags and the sublayers are all saved in the project file. A
+project made before layers existed opens with the default stack and everything on
+**Objects**.
 
 ---
 
@@ -748,7 +757,7 @@ js/generate.js    the map generators
 js/render.js      the renderer, including the grid lattices
 js/atmosphere.js  weather, time of day and colour grading
 js/labels.js      text on the map
-js/layers.js      the draw stack the renderer walks instead of a fixed script
+js/layers.js      the draw stack, the per-object flags and the sublayer order
 js/exporters.js   wall extraction and the VTT file formats
 js/app.js         interface, tools, undo, export wiring
 

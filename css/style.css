@@ -467,6 +467,47 @@ button.danger:hover {
 .propcell { aspect-ratio: 1; display: block; padding: 2px; }
 .propcell canvas { width: 100%; height: 100%; display: block; border-radius: var(--r-xs); }
 
+/* ---------- objects on a layer ---------- */
+
+.objhead { display: flex; gap: var(--s2); align-items: center; }
+.objhead .pickersearch { flex: 1 1 auto; margin: 0; }
+.objhead .iconbtn { flex: 0 0 auto; }
+
+.objlist {
+  display: flex; flex-direction: column; gap: 2px;
+  max-height: 46vh; overflow-y: auto;
+  border: 1px solid var(--line-strong); border-radius: var(--r-md);
+  padding: 3px; background: var(--surface-2);
+}
+.objrow {
+  display: flex; align-items: center; gap: var(--s1);
+  padding: 3px 4px; border-radius: var(--r-sm);
+  cursor: pointer; user-select: none;
+  border: 1px solid transparent;
+}
+.objrow:hover { background: var(--surface-3); }
+.objrow.active { border-color: var(--accent-dim); background: var(--accent-wash); }
+.objrow.hidden .objname { opacity: .42; }
+.objrow:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+.objname {
+  flex: 1 1 auto; display: flex; align-items: center; gap: var(--s2);
+  min-width: 0; font-size: var(--fs-sm);
+}
+.objname b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the sublayer, shown only when somebody has set one */
+.objname em {
+  font-style: normal; color: var(--accent); font-size: var(--fs-xs);
+  flex: 0 0 auto; font-variant-numeric: tabular-nums;
+}
+.objthumb {
+  flex: 0 0 auto; width: 26px; height: 26px; display: block;
+  border-radius: var(--r-xs); border: 1px solid var(--line);
+}
+
+.objselbox { display: none; margin-top: var(--s3); }
+.objselbox.on { display: block; }
+
 /* ---------- layer stack ---------- */
 
 .layerlist {

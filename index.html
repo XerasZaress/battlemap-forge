@@ -409,6 +409,23 @@
       </div>
     </section>
 
+    <section class="group" data-group="objects">
+      <h2>Objects <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
+      <div class="objhead">
+        <input type="search" id="objSearch" class="pickersearch" placeholder="Search objects…" autocomplete="off">
+        <button id="objHideAll" class="sm iconbtn" title="Hide every object on this layer" aria-label="Hide every object on this layer"><i data-icon="eyeoff"></i></button>
+        <button id="objLockAll" class="sm iconbtn" title="Lock every object on this layer" aria-label="Lock every object on this layer"><i data-icon="lock"></i></button>
+      </div>
+      <p class="hint" id="objLayerNote" style="margin:6px 0"></p>
+      <div class="objlist" id="objList"></div>
+      <div id="objSelBox" class="objselbox">
+        <label class="field"><span>Sublayer <b id="objSubLbl">0</b></span>
+          <input type="range" id="objSub" min="-9" max="9" step="1" value="0"></label>
+        <p class="hint" style="margin:4px 0 0">Which of two things sitting in the same
+          place is on top, without needing a layer for it. Higher is nearer the viewer.</p>
+      </div>
+    </section>
+
     <section class="group" data-group="layers">
       <h2>Layers <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
       <p class="hint" style="margin-top:0">The order things are drawn in, top of the stack first.
@@ -615,6 +632,7 @@
     <button data-side="right" data-panel="props" title="Props" aria-label="Props"><i data-icon="chair"></i></button>
     <button data-side="right" data-panel="prefabs" title="Prefab rooms" aria-label="Prefab rooms"><i data-icon="house"></i></button>
     <button data-side="right" data-panel="labels" title="Labels" aria-label="Labels"><i data-icon="text"></i></button>
+    <button data-side="right" data-panel="objects" title="Objects on this layer" aria-label="Objects on this layer"><i data-icon="list"></i></button>
     <button data-side="right" data-panel="layers" title="Layers" aria-label="Layers"><i data-icon="layers"></i></button>
     <button data-side="right" data-panel="stats" title="Map info" aria-label="Map info"><i data-icon="info"></i></button>
   </nav>

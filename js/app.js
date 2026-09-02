@@ -185,6 +185,7 @@ function refresh(full) {
   if (!rafPending) { rafPending = true; requestAnimationFrame(() => { rafPending = false; paint(); }); }
   updateStats();
   buildLayerPanel();
+  buildObjectsPanel();
 }
 
 function paint() {
@@ -1057,10 +1058,12 @@ function pickProp(fx, fy) {
   // a prop on a hidden or locked layer is not there as far as the cursor is
   // concerned, which is the whole reason to lock a layer of undergrowth
   const list = state.map.props.map((p, i) => ({ p, i })).filter(e => objEditable(state.map, e.p));
+  // the same order they are drawn in, so the cursor takes whatever is on top:
+  // sublayer first, then flat things under standing things, then depth
   list.sort((a, b) => {
     const ua = PROPS[a.p.type] && PROPS[a.p.type].under ? 0 : 1;
     const ub = PROPS[b.p.type] && PROPS[b.p.type].under ? 0 : 1;
-    return ua - ub || a.p.y - b.p.y;
+    return objSub(a.p) - objSub(b.p) || ua - ub || a.p.y - b.p.y;
   });
   for (let k = list.length - 1; k >= 0; k--) {
     const { p, i } = list[k];
@@ -2008,6 +2011,241 @@ window.addEventListener('resize', () => {
   paint();
 });
 
+/* ---------------- the objects on a layer ----------------
+   A layer holds things; this is the list of them. It is the other half of what
+   Inkarnate shows next to its stack, and it earns its place for the reason any
+   object list does: once a wood has thirty trees in it, "the one behind the
+   rock" is findable in a list and not on the map. Selecting, hiding, locking
+   and re-stacking one object all happen here rather than by hunting with the
+   cursor. */
+
+const OBJ_THUMB = 52;   // drawn big, shown at 26 — a wall torch at 26 px needs the pixels
+const objThumbCache = {};
+
+/** A small drawing of a prop, or a T for a label. Cached per prop form. */
+function objThumb(o) {
+  if (o.text !== undefined) {
+    const c = makeCanvas(OBJ_THUMB, OBJ_THUMB);
+    const x = c.getContext('2d');
+    x.fillStyle = '#2a2f3c'; x.fillRect(0, 0, OBJ_THUMB, OBJ_THUMB);
+    x.fillStyle = '#cfd6e4';
+    x.font = '600 30px Georgia, serif';
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText('T', OBJ_THUMB / 2, OBJ_THUMB / 2 + 1);
+    return c;
+  }
+  const def = propDefFor(PROPS[o.type], o.vi);
+  if (!def) return null;
+  const key = o.type + ':' + (o.vi || 0);
+  if (objThumbCache[key]) return objThumbCache[key];
+  const c = makeCanvas(OBJ_THUMB, OBJ_THUMB);
+  const x = c.getContext('2d');
+  x.fillStyle = '#2a2f3c'; x.fillRect(0, 0, OBJ_THUMB, OBJ_THUMB);
+  x.save();
+  x.translate(OBJ_THUMB / 2, OBJ_THUMB / 2);
+  try { def.draw(x, (OBJ_THUMB - 8) / Math.max(1, def.size), seededFn(7)); } catch (e) { /* thumbnail only */ }
+  x.restore();
+  objThumbCache[key] = c;
+  return c;
+}
+
+/** Everything on the layer being edited, labels after props, each tagged with
+    the array and index the rest of the app addresses it by. */
+function layerObjects(id) {
+  const map = state.map, out = [];
+  map.props.forEach((p, i) => { if (p.lay === id) out.push({ o: p, kind: 'prop', i }); });
+  (map.labels || []).forEach((l, i) => { if (l.lay === id) out.push({ o: l, kind: 'label', i }); });
+  return out;
+}
+
+function objectsPanelLayer() {
+  const map = state.map;
+  if (!map) return null;
+  ensureLayers(map);
+  const edit = layEditing == null ? null : layerById(map, layEditing);
+  if (edit && edit.kind === 'objects') return edit;
+  return layerById(map, activeLayerId(activeLayerKind()));
+}
+
+let objListSig = null;
+
+function buildObjectsPanel(force) {
+  const host = $('objList');
+  if (!host || !state.map) return;
+  const L = objectsPanelLayer();
+  const q = ($('objSearch').value || '').trim().toLowerCase();
+  const all = L ? layerObjects(L.id) : [];
+  const rows = q ? all.filter(e => objLabel(e.o).toLowerCase().includes(q)) : all;
+
+  const sig = (L ? L.id + L.name : '-') + '|' + q + '|' + state.selected + '|' + state.selLabel + '|' +
+    all.map(e => objLabel(e.o) + (e.o.hid ? 'h' : '') + (e.o.lk ? 'l' : '') + objSub(e.o)).join(',');
+  if (!force && sig === objListSig) return;
+  objListSig = sig;
+
+  $('objLayerNote').textContent = L
+    ? all.length + (all.length === 1 ? ' thing on ' : ' things on ') + L.name
+    : 'Pick an object layer in the Layers panel.';
+  host.textContent = '';
+
+  if (!rows.length) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.style.margin = '10px 2px';
+    p.textContent = all.length ? 'Nothing here matches.' : 'Nothing on this layer yet.';
+    host.appendChild(p);
+    syncObjSelBox();
+    return;
+  }
+
+  // Topmost first, the way the stack above it reads. Props and labels are
+  // numbered in their own arrays, so the index alone would sort label 0 under
+  // prop 40; the kind has to break the tie first, and labels draw last.
+  const rank = (e) => (e.kind === 'label' ? 1 : 0);
+  rows.sort((a, b) => objSub(b.o) - objSub(a.o) || rank(b) - rank(a) || b.i - a.i);
+
+  for (const e of rows) {
+    const row = document.createElement('div');
+    row.className = 'objrow';
+    const sel = (e.kind === 'prop' && state.selected === e.i) ||
+                (e.kind === 'label' && state.selLabel === e.i);
+    if (sel) row.classList.add('active');
+    if (e.o.hid) row.classList.add('hidden');
+    row.tabIndex = 0;
+    row.setAttribute('role', 'button');
+
+    const eye = document.createElement('button');
+    eye.className = 'laytoggle';
+    eye.innerHTML = '<i data-icon="' + (e.o.hid ? 'eyeoff' : 'eye') + '"></i>';
+    eye.title = e.o.hid ? 'Show this' : 'Hide this';
+    eye.addEventListener('click', (ev) => { ev.stopPropagation(); toggleObjFlag(e, 'hid'); });
+
+    const thumb = objThumb(e.o);
+    const name = document.createElement('span');
+    name.className = 'objname';
+    if (thumb) { thumb.className = 'objthumb'; name.appendChild(thumb); }
+    const t = document.createElement('b');
+    t.textContent = objLabel(e.o);
+    name.appendChild(t);
+    if (objSub(e.o)) {
+      const sub = document.createElement('em');
+      sub.textContent = objSub(e.o) > 0 ? '+' + objSub(e.o) : String(objSub(e.o));
+      sub.title = 'Sublayer ' + objSub(e.o);
+      name.appendChild(sub);
+    }
+
+    const lock = document.createElement('button');
+    lock.className = 'laytoggle' + (e.o.lk ? ' on' : '');
+    lock.innerHTML = '<i data-icon="' + (e.o.lk ? 'lock' : 'unlock') + '"></i>';
+    lock.title = e.o.lk ? 'Unlock this' : 'Lock this so the cursor ignores it';
+    lock.addEventListener('click', (ev) => { ev.stopPropagation(); toggleObjFlag(e, 'lk'); });
+
+    row.append(eye, name, lock);
+    const choose = () => selectFromObjectList(e);
+    row.addEventListener('click', choose);
+    row.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); choose(); }
+    });
+    host.appendChild(row);
+  }
+  renderIcons(host);
+  syncObjSelBox();
+}
+
+/** Clicking a row selects that object on the map and shows you where it is. */
+function selectFromObjectList(e) {
+  if (e.o.hid || e.o.lk) { toast(e.o.hid ? 'That one is hidden.' : 'That one is locked.'); return; }
+  if (e.kind === 'prop') {
+    deselectLabel(); deselectRoom();
+    setTool('select');
+    selectProp(e.i);
+  } else {
+    deselectProp(); deselectRoom();
+    setTool('text');
+    selectLabel(e.i);
+  }
+  centreOn(e.o.x, e.o.y);
+  buildObjectsPanel(true);
+  paint();
+}
+
+/** Bring a point to the middle of the view, but only when it is off screen —
+    a list click should not yank the map about when you can already see it. */
+function centreOn(fx, fy) {
+  const s = state.workPpg * state.view.zoom;
+  const sx = fx * s + state.view.x, sy = fy * s + state.view.y;
+  const w = view.clientWidth, h = view.clientHeight, m = 40;
+  if (sx >= m && sx <= w - m && sy >= m && sy <= h - m) return;
+  state.view.x = w / 2 - fx * s;
+  state.view.y = h / 2 - fy * s;
+}
+
+function toggleObjFlag(e, flag) {
+  snapshot();
+  const o = e.o;
+  o[flag] = !o[flag];
+  if (!o[flag]) delete o[flag];   // absent is the common case; keep it out of the file
+  if (o.hid || o.lk) {
+    if (e.kind === 'prop' && state.selected === e.i) deselectProp();
+    if (e.kind === 'label' && state.selLabel === e.i) deselectLabel();
+  }
+  syncLightsFromProps(state.map);
+  buildObjectsPanel(true);
+  refresh(false);
+}
+
+/** The header buttons act on everything the list is currently showing, so a
+    search term narrows what they touch. */
+function objBulk(flag) {
+  const L = objectsPanelLayer();
+  if (!L) return;
+  const q = ($('objSearch').value || '').trim().toLowerCase();
+  let rows = layerObjects(L.id);
+  if (q) rows = rows.filter(e => objLabel(e.o).toLowerCase().includes(q));
+  if (!rows.length) return;
+  snapshot();
+  const on = !rows.every(e => e.o[flag]);   // all on already means turn them off
+  for (const e of rows) { if (on) e.o[flag] = true; else delete e.o[flag]; }
+  deselectProp(); deselectLabel();
+  syncLightsFromProps(state.map);
+  buildObjectsPanel(true);
+  refresh(false);
+}
+
+function selectedObjectEntry() {
+  if (state.selected != null && state.map.props[state.selected])
+    return { o: state.map.props[state.selected], kind: 'prop', i: state.selected };
+  if (state.selLabel != null && state.map.labels[state.selLabel])
+    return { o: state.map.labels[state.selLabel], kind: 'label', i: state.selLabel };
+  return null;
+}
+
+function syncObjSelBox() {
+  const e = selectedObjectEntry();
+  $('objSelBox').classList.toggle('on', !!e);
+  if (!e) return;
+  $('objSub').value = objSub(e.o);
+  $('objSubLbl').textContent = objSub(e.o);
+}
+
+function applyObjSub() {
+  const e = selectedObjectEntry();
+  if (!e) return;
+  const v = parseInt($('objSub').value, 10) || 0;
+  if (objSub(e.o) === v) return;
+  snapshot();
+  if (v) e.o.sub = v; else delete e.o.sub;
+  $('objSubLbl').textContent = v;
+  buildObjectsPanel(true);
+  refresh(false);
+}
+
+function setupObjectsPanel() {
+  $('objSearch').addEventListener('input', () => buildObjectsPanel(true));
+  $('objHideAll').addEventListener('click', () => objBulk('hid'));
+  $('objLockAll').addEventListener('click', () => objBulk('lk'));
+  $('objSub').addEventListener('input', applyObjSub);
+}
+
 /* ---------------- the layer stack ----------------
    The panel reads top-down, the way a stack of sheets on a desk does, while
    map.layers is stored bottom-first in drawing order. Every index that crosses
@@ -2116,6 +2354,7 @@ function buildLayerPanel(force) {
       layEditing = L.id;
       if (L.kind === 'objects') setActiveLayer(L.id); else buildLayerPanel();
       syncLayerBox();
+      buildObjectsPanel(true);
     });
     host.appendChild(row);
   }
@@ -2131,7 +2370,7 @@ function escapeHtml(t) {
 
 /* The three toggles that are also Appearance checkboxes drive the checkbox as
    well, so the two places that show the same fact can never disagree. */
-const LAYER_MIRROR = { lighting: 'optLighting', grid: 'optGrid' };
+const LAYER_MIRROR = { grid: 'optGrid' };
 
 function toggleLayerVisible(id) {
   const L = layerById(state.map, id);
@@ -2178,11 +2417,15 @@ function syncLayerBox() {
   // terrain has nothing beneath it to blend with
   const canBlend = !kind.filter && L.kind !== 'terrain';
   $('layBlendField').style.display = canBlend ? '' : 'none';
+  // the effects row's strengths live in Appearance, each with its own slider;
+  // a second one here would be a third way to say the same thing
+  const canFade = L.kind !== 'effects';
+  $('layOpacity').closest('.field').style.display = canFade ? '' : 'none';
   $('layDelete').disabled = kind.pinned ||
     (L.kind === 'objects' && objectLayers(state.map).length <= 1);
   $('layMerge').disabled = L.kind !== 'objects';
   $('laySelMove').disabled = L.kind !== 'objects' || (state.selected == null && state.selLabel == null);
-  $('layBlurb').textContent = kind.filter
+  $('layBlurb').textContent = kind.filter && L.kind !== 'effects'
     ? kind.blurb + ' Opacity is how strong it is.'
     : kind.blurb;
 }
@@ -2192,7 +2435,7 @@ function applyLayerEdits() {
   if (!L) return;
   const kind = LAYER_KINDS[L.kind];
   if (!kind.unique) L.name = $('layName').value.trim() || L.name;
-  L.opacity = num('layOpacity');
+  if (L.kind !== 'effects') L.opacity = num('layOpacity');
   L.blend = $('layBlend').value;
   $('layOpacityLbl').textContent = Math.round(L.opacity * 100) + '%';
   $('layEditName').textContent = L.name;
@@ -3367,6 +3610,7 @@ function wire() {
   });
 
   setupLayerPanel();
+  setupObjectsPanel();
   applyKnobSchema();
   syncSliderLabels();
   setBrush(1);
@@ -3378,3 +3622,4 @@ function wire() {
 wire();
 generate();
 buildLayerPanel();
+buildObjectsPanel();

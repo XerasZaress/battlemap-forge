@@ -140,7 +140,9 @@ function labelHit(l, fx, fy) {
    same rule the props follow. Drawing ignores it: a locked layer still shows. */
 function pickLabel(map, fx, fy, editableOnly) {
   const list = map.labels || [];
-  for (let i = list.length - 1; i >= 0; i--) {
+  // topmost first, which with sublayers is no longer simply the last written
+  const order = list.map((l, i) => i).sort((a, b) => objSub(list[b]) - objSub(list[a]) || b - a);
+  for (const i of order) {
     if (editableOnly && !objEditable(map, list[i])) continue;
     if (labelHit(list[i], fx, fy)) return i;
   }
@@ -251,5 +253,6 @@ function drawLabel(ctx, l, u) {
 function drawLabels(ctx, map, u) {
   const list = map.labels;
   if (!list || !list.length) return;
-  for (const l of list) if (objVisible(map, l)) drawLabel(ctx, l, u);
+  const shown = list.filter(l => objVisible(map, l)).sort((a, b) => objSub(a) - objSub(b));
+  for (const l of shown) drawLabel(ctx, l, u);
 }

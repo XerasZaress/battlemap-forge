@@ -1562,18 +1562,28 @@ function drawTerrainLayer(ctx, map, u, opts, seed, env) {
    the light pooling and the water sheen washing over them; labels do not,
    because a label is writing on the map, not an object casting anything. */
 function drawObjectLayer(ctx, map, u, opts, L, env) {
-  const props = map.props.filter(p => p.lay === L.id && !propIsSunk(map, p));
-  const labels = (map.labels || []).filter(l => l.lay === L.id);
+  const props = map.props.filter(p => p.lay === L.id && !p.hid && !propIsSunk(map, p));
+  const labels = (map.labels || []).filter(l => l.lay === L.id && !l.hid);
   if (props.length) {
-    const sheet = compositeLayer(ctx, map, u, L, (c) => drawPropList(c, map, u, opts, props));
+    // one drawPropList per sublayer, low to high, so setting a number moves a
+    // thing in the pile without disturbing how everything else was already
+    // ordered among itself
+    const levels = subLevels(props);
+    const paint = (c) => {
+      for (const lv of levels) drawPropList(c, map, u, opts, props.filter(p => objSub(p) === lv));
+    };
+    const sheet = compositeLayer(ctx, map, u, L, paint);
     const mc = env.propMask.getContext('2d');
     if (sheet) {
       mc.save(); mc.globalAlpha = clamp(L.opacity, 0, 1); mc.drawImage(sheet, 0, 0); mc.restore();
     } else {
-      drawPropList(mc, map, u, opts, props);
+      paint(mc);
     }
   }
-  if (labels.length) compositeLayer(ctx, map, u, L, (c) => { for (const l of labels) drawLabel(c, l, u); });
+  if (labels.length) {
+    const sorted = labels.slice().sort((a, b) => objSub(a) - objSub(b));
+    compositeLayer(ctx, map, u, L, (c) => { for (const l of sorted) drawLabel(c, l, u); });
+  }
 }
 
 /** Walk the stack. `env` carries what the editor already has cached — a
@@ -1594,18 +1604,16 @@ function drawLayerStack(ctx, map, u, opts, seed, envIn) {
       case 'objects':
         drawObjectLayer(ctx, map, u, opts, L, env);
         break;
-      case 'lighting': {
-        if (opts.lighting === false) break;
-        const sh = env.shadows || computeLightShadows(map).polys;
-        filterLayer(ctx, map, u, L, (c) => drawLighting(c, map, u, opts, env.rooms, sh, env.propMask));
-        break;
-      }
-      case 'finish':
-        if (opts.style !== 'painted' || env.bgImage) break;
-        filterLayer(ctx, map, u, L, (c) => applyPaintedStyle(c, map, u, opts, env.rooms));
-        break;
-      case 'atmos':
-        filterLayer(ctx, map, u, L, (c) => drawAtmosphere(c, map, u, opts, seed));
+      /* One row, three effects, always in this order: light the scene, finish
+         the paint, then put the weather over the lot. Their strengths live in
+         Appearance; what the row decides is where in the stack they land. */
+      case 'effects':
+        if (opts.lighting !== false) {
+          const sh = env.shadows || computeLightShadows(map).polys;
+          drawLighting(ctx, map, u, opts, env.rooms, sh, env.propMask);
+        }
+        if (opts.style === 'painted' && !env.bgImage) applyPaintedStyle(ctx, map, u, opts, env.rooms);
+        drawAtmosphere(ctx, map, u, opts, seed);
         break;
       case 'grid':
         if (opts.grid === false) break;
