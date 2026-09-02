@@ -185,7 +185,6 @@ function refresh(full) {
   if (!rafPending) { rafPending = true; requestAnimationFrame(() => { rafPending = false; paint(); }); }
   updateStats();
   buildLayerPanel();
-  buildObjectsPanel();
 }
 
 function paint() {
@@ -1091,6 +1090,7 @@ function selectProp(i) {
     if (def && def.cat !== state.propCat) state.propCat = def.cat;
     buildPropPanel();
   }
+  revealSelection();
   syncTransformUI();
   paint();
 }
@@ -1349,6 +1349,7 @@ function selectLabel(i) {
   state.selLabel = i;
   deselectProp();
   deselectRoom();
+  revealSelection();
   syncLabelUI();
   paint();
 }
@@ -2058,51 +2059,61 @@ function layerObjects(id) {
   return out;
 }
 
-function objectsPanelLayer() {
-  const map = state.map;
-  if (!map) return null;
-  ensureLayers(map);
-  const edit = layEditing == null ? null : layerById(map, layEditing);
-  if (edit && edit.kind === 'objects') return edit;
-  return layerById(map, activeLayerId(activeLayerKind()));
+/* Which layers are unfolded. View state, not map state: it belongs to this
+   session's panel and not in anybody's project file. Layers start folded —
+   a wood with forty trees in it would otherwise bury the stack it is part of. */
+const layOpen = new Set();
+
+function toggleLayerOpen(id) {
+  if (layOpen.has(id)) layOpen.delete(id); else layOpen.add(id);
+  buildLayerPanel(true);
 }
 
-let objListSig = null;
+/** Unfold whatever holds the current selection, so picking something on the
+    map shows you where it lives rather than leaving you to go looking. */
+function revealSelection() {
+  const e = selectedObjectEntry();
+  if (e && !layOpen.has(e.o.lay)) { layOpen.add(e.o.lay); return true; }
+  return false;
+}
 
-function buildObjectsPanel(force) {
-  const host = $('objList');
-  if (!host || !state.map) return;
-  const L = objectsPanelLayer();
-  const q = ($('objSearch').value || '').trim().toLowerCase();
-  const all = L ? layerObjects(L.id) : [];
+/** The objects of one layer, in the order they are drawn, topmost first.
+    Props and labels are numbered in their own arrays, so the index alone would
+    sort label 0 under prop 40; the kind has to break the tie first, and labels
+    draw last. */
+function objectRowsFor(id, q) {
+  const all = layerObjects(id);
   const rows = q ? all.filter(e => objLabel(e.o).toLowerCase().includes(q)) : all;
-
-  const sig = (L ? L.id + L.name : '-') + '|' + q + '|' + state.selected + '|' + state.selLabel + '|' +
-    all.map(e => objLabel(e.o) + (e.o.hid ? 'h' : '') + (e.o.lk ? 'l' : '') + objSub(e.o)).join(',');
-  if (!force && sig === objListSig) return;
-  objListSig = sig;
-
-  $('objLayerNote').textContent = L
-    ? all.length + (all.length === 1 ? ' thing on ' : ' things on ') + L.name
-    : 'Pick an object layer in the Layers panel.';
-  host.textContent = '';
-
-  if (!rows.length) {
-    const p = document.createElement('p');
-    p.className = 'hint';
-    p.style.margin = '10px 2px';
-    p.textContent = all.length ? 'Nothing here matches.' : 'Nothing on this layer yet.';
-    host.appendChild(p);
-    syncObjSelBox();
-    return;
-  }
-
-  // Topmost first, the way the stack above it reads. Props and labels are
-  // numbered in their own arrays, so the index alone would sort label 0 under
-  // prop 40; the kind has to break the tie first, and labels draw last.
   const rank = (e) => (e.kind === 'label' ? 1 : 0);
   rows.sort((a, b) => objSub(b.o) - objSub(a.o) || rank(b) - rank(a) || b.i - a.i);
+  return rows;
+}
 
+/** Every object row the tree is currently showing — unfolded layers only, and
+    only what survives the search. What the two header buttons act on, so that
+    what they touch is exactly what you can see. */
+function shownObjectRows() {
+  const map = state.map, q = objQuery();
+  const out = [];
+  for (const L of map.layers) {
+    if (L.kind !== 'objects' || !layOpen.has(L.id)) continue;
+    out.push(...objectRowsFor(L.id, q));
+  }
+  return out;
+}
+
+function objQuery() { return ($('objSearch').value || '').trim().toLowerCase(); }
+
+/** Append one layer's object rows to the tree, indented under its layer row. */
+function appendObjectRows(host, L, q) {
+  const rows = objectRowsFor(L.id, q);
+  if (!rows.length) {
+    const p = document.createElement('p');
+    p.className = 'hint objempty';
+    p.textContent = layerObjects(L.id).length ? 'Nothing here matches.' : 'Nothing on this layer yet.';
+    host.appendChild(p);
+    return;
+  }
   for (const e of rows) {
     const row = document.createElement('div');
     row.className = 'objrow';
@@ -2147,8 +2158,6 @@ function buildObjectsPanel(force) {
     });
     host.appendChild(row);
   }
-  renderIcons(host);
-  syncObjSelBox();
 }
 
 /** Clicking a row selects that object on the map and shows you where it is. */
@@ -2164,7 +2173,7 @@ function selectFromObjectList(e) {
     selectLabel(e.i);
   }
   centreOn(e.o.x, e.o.y);
-  buildObjectsPanel(true);
+  buildLayerPanel(true);
   paint();
 }
 
@@ -2189,25 +2198,25 @@ function toggleObjFlag(e, flag) {
     if (e.kind === 'label' && state.selLabel === e.i) deselectLabel();
   }
   syncLightsFromProps(state.map);
-  buildObjectsPanel(true);
+  buildLayerPanel(true);
   refresh(false);
 }
 
-/** The header buttons act on everything the list is currently showing, so a
-    search term narrows what they touch. */
+/** The header buttons act on every object row the tree is showing — so folding
+    a layer away puts it out of reach, and a search term narrows what they
+    touch to the things you can read. */
 function objBulk(flag) {
-  const L = objectsPanelLayer();
-  if (!L) return;
-  const q = ($('objSearch').value || '').trim().toLowerCase();
-  let rows = layerObjects(L.id);
-  if (q) rows = rows.filter(e => objLabel(e.o).toLowerCase().includes(q));
-  if (!rows.length) return;
+  const rows = shownObjectRows();
+  if (!rows.length) {
+    toast(objQuery() ? 'Nothing showing matches that.' : 'Unfold a layer first.');
+    return;
+  }
   snapshot();
   const on = !rows.every(e => e.o[flag]);   // all on already means turn them off
   for (const e of rows) { if (on) e.o[flag] = true; else delete e.o[flag]; }
   deselectProp(); deselectLabel();
   syncLightsFromProps(state.map);
-  buildObjectsPanel(true);
+  buildLayerPanel(true);
   refresh(false);
 }
 
@@ -2235,12 +2244,17 @@ function applyObjSub() {
   snapshot();
   if (v) e.o.sub = v; else delete e.o.sub;
   $('objSubLbl').textContent = v;
-  buildObjectsPanel(true);
+  buildLayerPanel(true);
   refresh(false);
 }
 
 function setupObjectsPanel() {
-  $('objSearch').addEventListener('input', () => buildObjectsPanel(true));
+  // a search unfolds every object layer, because a hit inside a folded one you
+  // cannot see is the same as no hit at all
+  $('objSearch').addEventListener('input', () => {
+    if (objQuery()) for (const L of state.map.layers) if (L.kind === 'objects') layOpen.add(L.id);
+    buildLayerPanel(true);
+  });
   $('objHideAll').addEventListener('click', () => objBulk('hid'));
   $('objLockAll').addEventListener('click', () => objBulk('lk'));
   $('objSub').addEventListener('input', applyObjSub);
@@ -2307,8 +2321,13 @@ function buildLayerPanel(force) {
   map.curLay = activeLayerId('prop');
   const activeId = activeLayerId(activeLayerKind());
   if (layEditing != null && !layerById(map, layEditing)) layEditing = null;
-  const sig = layerPanelSig(map, activeId);
-  if (!force && sig === layerSig) { syncLayerBox(); return; }
+  const q = objQuery();
+  const sig = layerPanelSig(map, activeId) + '|' + q + '|' + [...layOpen].sort().join(',') +
+    '|' + state.selected + '|' + state.selLabel + '|' +
+    map.layers.filter(L => L.kind === 'objects' && layOpen.has(L.id))
+      .map(L => layerObjects(L.id).map(e => objLabel(e.o) + (e.o.hid ? 'h' : '') + (e.o.lk ? 'l' : '') + objSub(e.o)).join(','))
+      .join(';');
+  if (!force && sig === layerSig) { syncLayerBox(); syncObjSelBox(); return; }
   layerSig = sig;
   host.textContent = '';
 
@@ -2330,6 +2349,23 @@ function buildLayerPanel(force) {
       row.addEventListener('keydown', (ev) => layerRowKey(ev, L.id));
     }
 
+    // Only a layer that holds things gets a twisty. Everything else keeps a
+    // blank of the same width, so every name in the stack starts on one line.
+    const holds = L.kind === 'objects';
+    const open = holds && layOpen.has(L.id);
+    const twist = document.createElement('button');
+    twist.className = 'laytwist' + (open ? ' open' : '');
+    if (holds) {
+      twist.innerHTML = '<i data-icon="chevRight"></i>';
+      twist.title = open ? 'Fold this layer away' : 'Show what is on this layer';
+      twist.setAttribute('aria-expanded', open ? 'true' : 'false');
+      twist.addEventListener('click', (ev) => { ev.stopPropagation(); toggleLayerOpen(L.id); });
+    } else {
+      twist.className += ' blank';
+      twist.tabIndex = -1;
+      twist.setAttribute('aria-hidden', 'true');
+    }
+
     const eye = document.createElement('button');
     eye.className = 'laytoggle';
     eye.innerHTML = '<i data-icon="' + (L.visible ? 'eye' : 'eyeoff') + '"></i>';
@@ -2340,7 +2376,7 @@ function buildLayerPanel(force) {
     name.className = 'layname';
     const counts = layerCounts(map, L.id);
     name.innerHTML = '<i data-icon="' + kind.icon + '"></i><b>' + escapeHtml(L.name) + '</b>' +
-      (L.kind === 'objects' ? '<em>' + counts.total + '</em>' : '');
+      (holds ? '<em>' + counts.total + '</em>' : '');
 
     const lock = document.createElement('button');
     lock.className = 'laytoggle' + (L.locked ? ' on' : '');
@@ -2349,19 +2385,32 @@ function buildLayerPanel(force) {
     lock.disabled = kind.pinned && L.kind !== 'terrain';
     lock.addEventListener('click', (ev) => { ev.stopPropagation(); toggleLayerLocked(L.id); });
 
-    row.append(eye, name, lock);
+    row.append(twist, eye, name, lock);
     row.addEventListener('click', () => {
       layEditing = L.id;
-      if (L.kind === 'objects') setActiveLayer(L.id); else buildLayerPanel();
+      if (L.kind === 'objects') setActiveLayer(L.id); else buildLayerPanel(true);
       syncLayerBox();
-      buildObjectsPanel(true);
     });
     host.appendChild(row);
+
+    // the layer's contents, indented under it, as part of the same list so the
+    // whole stack scrolls as one
+    if (open) {
+      const kids = document.createElement('div');
+      kids.className = 'objkids';
+      appendObjectRows(kids, L, q);
+      host.appendChild(kids);
+    }
   }
   wireLayerDrag(host);
   renderIcons(host);
   syncLayerBox();
+  syncObjSelBox();
   $('layAdd').disabled = map.layers.length >= LAYER_MAX;
+  // unfolding to reveal a selection is only half the job if the row it revealed
+  // is past the bottom of a list forty rows long
+  const sel = host.querySelector('.objrow.active');
+  if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
 }
 
 function escapeHtml(t) {
@@ -2488,11 +2537,16 @@ function wireLayerDrag(host) {
   let drag = null;
 
   const rowAt = (clientY) => {
+    // An unfolded layer puts its contents between its row and the next one, so
+    // a pointer there is over no row at all. That block belongs to the layer it
+    // hangs from, so the last row that starts above the cursor is the answer.
+    let last = null;
     for (const r of host.querySelectorAll('.layerrow')) {
       const b = r.getBoundingClientRect();
       if (clientY >= b.top && clientY <= b.bottom) return { row: r, above: clientY < b.top + b.height / 2 };
+      if (b.top <= clientY) last = r;
     }
-    return null;
+    return last ? { row: last, above: false } : null;
   };
   const clearMarks = () => {
     for (const r of host.querySelectorAll('.layerrow')) r.classList.remove('dropbefore', 'dropafter');
@@ -3622,4 +3676,3 @@ function wire() {
 wire();
 generate();
 buildLayerPanel();
-buildObjectsPanel();

@@ -569,20 +569,28 @@ undergrowth you scattered and it stops grabbing the pointer while you place the 
 
 ---
 
-## The Objects panel
+## What is on a layer
 
-A layer holds things; the **Objects** panel is the list of them — one row per prop and per
-label on the layer you have open, with a thumbnail and a name. Once a wood has thirty trees
-in it, the one behind the rock is findable in a list and not on the map.
+A layer holds things, so the things live under it. Click the twisty on an object layer and
+it unfolds into one row per prop and per label on it, indented under the layer, with a
+thumbnail and a name. Once a wood has thirty trees in it, the one behind the rock is
+findable in a list and not on the map.
+
+Layers start folded, because an unfolded wood would bury the stack it is part of. The
+count beside the name says how much is in there before you open it.
 
 - **Click a row** to select that object. It becomes the live selection on the map, with its
-  handles and toolbar, and the view scrolls to it if it was off screen.
+  handles and toolbar, and the view scrolls to it if it was off screen. Selecting something
+  on the map does the reverse: its layer unfolds and the tree scrolls to its row.
 - **The eye** hides one object — and like a hidden layer, a hidden object stops blocking
   sight and stops giving light.
 - **The padlock** leaves it drawn but takes it out of the cursor's reach.
-- **Search** narrows the list by name, and the two header buttons hide or lock everything
-  the list is currently showing — so searching `torch` and pressing the padlock locks the
-  torches and nothing else.
+- **Search** at the top of the panel filters by name and unfolds every object layer, since
+  a hit inside a folded layer is the same as no hit at all.
+
+The two buttons beside the search box hide or lock **every row the tree is currently
+showing** — so a folded layer is out of reach, and searching `torch` before pressing the
+padlock locks the torches and nothing else.
 
 ### Sublayer
 

@@ -467,18 +467,32 @@ button.danger:hover {
 .propcell { aspect-ratio: 1; display: block; padding: 2px; }
 .propcell canvas { width: 100%; height: 100%; display: block; border-radius: var(--r-xs); }
 
-/* ---------- objects on a layer ---------- */
+/* ---------- the things on a layer, nested under it ---------- */
 
-.objhead { display: flex; gap: var(--s2); align-items: center; }
+.objhead { display: flex; gap: var(--s2); align-items: center; margin-bottom: var(--s2); }
 .objhead .pickersearch { flex: 1 1 auto; margin: 0; }
 .objhead .iconbtn { flex: 0 0 auto; }
 
-.objlist {
-  display: flex; flex-direction: column; gap: 2px;
-  max-height: 46vh; overflow-y: auto;
-  border: 1px solid var(--line-strong); border-radius: var(--r-md);
-  padding: 3px; background: var(--surface-2);
+/* the twisty, and the blank of the same width that keeps every name aligned */
+.laytwist {
+  flex: 0 0 auto; width: 16px; height: 20px; padding: 0;
+  display: grid; place-items: center;
+  background: none; border: 0; cursor: pointer;
+  color: var(--text-dim); border-radius: var(--r-xs);
 }
+.laytwist svg { width: 13px; height: 13px; transition: transform .12s ease; }
+.laytwist.open svg { transform: rotate(90deg); }
+.laytwist:hover { color: var(--text); }
+.laytwist.blank { cursor: default; pointer-events: none; visibility: hidden; }
+
+/* one indent, with a rule down it so a long list stays tied to its layer */
+.objkids {
+  display: flex; flex-direction: column; gap: 1px;
+  margin: 1px 0 3px 9px; padding-left: 7px;
+  border-left: 1px solid var(--line-strong);
+}
+.objempty { margin: 4px 2px 4px 4px; }
+
 .objrow {
   display: flex; align-items: center; gap: var(--s1);
   padding: 3px 4px; border-radius: var(--r-sm);
@@ -514,6 +528,8 @@ button.danger:hover {
   display: flex; flex-direction: column; gap: 2px;
   border: 1px solid var(--line-strong); border-radius: var(--r-md);
   padding: 3px; background: var(--surface-2);
+  /* an unfolded wood is forty rows; the stack it belongs to has to stay usable */
+  max-height: 56vh; overflow-y: auto;
 }
 .layerrow {
   display: flex; align-items: center; gap: var(--s1);

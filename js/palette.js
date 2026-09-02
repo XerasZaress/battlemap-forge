@@ -39,8 +39,7 @@ function palCommands() {
     ['left', 'help', 'Shortcuts & VTT notes'],
     ['right', 'tools', 'Tool options'], ['right', 'terrain', 'Terrain palette'],
     ['right', 'props', 'Props'], ['right', 'prefabs', 'Prefab rooms'],
-    ['right', 'labels', 'Labels'], ['right', 'objects', 'Objects on this layer'],
-    ['right', 'layers', 'Layers'], ['right', 'stats', 'Map info']
+    ['right', 'labels', 'Labels'], ['right', 'layers', 'Layers'], ['right', 'stats', 'Map info']
   ];
   for (const [side, name, label] of PANELS)
     add('Panel', label, '', () => ensurePanel(side, name));
