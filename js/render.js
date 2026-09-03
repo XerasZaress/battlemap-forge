@@ -903,6 +903,21 @@ function drawPropArt(ctx, u, p, def, seed) {
  * together, then all the artwork, keeps the renderer from flipping canvas state
  * hundreds of times a frame, which on a crowded map is most of the cost.
  */
+/* One object's own opacity and blend, applied to whichever pass is drawing it.
+   Done per pass rather than by compositing the prop as a unit, so the order the
+   list already draws in — flat art, then every grounding, then standing art —
+   survives untouched: a faded prop must not drag its shadow up over the props
+   behind it just because it is faded. */
+function withObjStyle(ctx, o, fn) {
+  if (objPlain(o)) { fn(ctx); return; }
+  ctx.save();
+  ctx.globalAlpha *= clamp(objOpacity(o), 0, 1);
+  const b = objBlend(o);
+  if (b !== 'normal') ctx.globalCompositeOperation = b;
+  fn(ctx);
+  ctx.restore();
+}
+
 function drawPropList(ctx, map, u, opts, props) {
   const flat = [], standing = [];
   for (const p of props) {
@@ -920,11 +935,11 @@ function drawPropList(ctx, map, u, opts, props) {
   // Nearer things last, so a prop overlaps the one behind it.
   standing.sort((a, b) => a.p.y - b.p.y);
 
-  for (const e of flat) drawPropArt(ctx, u, e.p, e.def, e.seed);
+  for (const e of flat) withObjStyle(ctx, e.p, (c) => drawPropArt(c, u, e.p, e.def, e.seed));
   if (opts.shadows) {
-    for (const e of standing) drawPropGrounding(ctx, map, u, e.p, e.def, e.seed);
+    for (const e of standing) withObjStyle(ctx, e.p, (c) => drawPropGrounding(c, map, u, e.p, e.def, e.seed));
   }
-  for (const e of standing) drawPropArt(ctx, u, e.p, e.def, e.seed);
+  for (const e of standing) withObjStyle(ctx, e.p, (c) => drawPropArt(c, u, e.p, e.def, e.seed));
 }
 
 /**

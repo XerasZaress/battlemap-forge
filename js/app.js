@@ -2351,6 +2351,10 @@ function appendObjectRows(host, L, q) {
     grip.innerHTML = '<i data-icon="grip"></i>';
     grip.title = 'Drag to change what is on top';
 
+    const tag = document.createElement('span');
+    tag.className = 'laytag';
+    if (e.o.color) tag.style.background = e.o.color;
+
     const eye = document.createElement('button');
     eye.className = 'laytoggle';
     eye.innerHTML = '<i data-icon="' + (e.o.hid ? 'eyeoff' : 'eye') + '"></i>';
@@ -2384,9 +2388,14 @@ function appendObjectRows(host, L, q) {
       bulkLocked(key, () => toggleObjFlag(e, 'lk'));
     });
 
-    row.append(grip, eye, name, lock);
+    row.append(grip, tag, eye, name, lock);
     row.addEventListener('click', (ev) => {
-      if (rowClick(key, ev)) selectFromObjectList(e);
+      if (rowClick(key, ev)) selectFromObjectList(e); else syncLayerBox();
+    });
+    // the same gesture as a layer row, on the same part of the row
+    row.addEventListener('dblclick', (ev) => {
+      ev.preventDefault(); ev.stopPropagation();
+      beginRenameObject(row, e.o);
     });
     row.addEventListener('keydown', (ev) => {
       if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); rowSel = [key]; rowAnchor = key; selectFromObjectList(e); }
@@ -2540,7 +2549,8 @@ function buildLayerPanel(force) {
     '|' + rowSel.join(',') +
     '|' + state.selected + '|' + state.selLabel + '|' +
     map.layers.filter(L => L.kind === 'objects' && layOpen.has(L.id))
-      .map(L => layerObjects(L.id).map(e => objLabel(e.o) + (e.o.hid ? 'h' : '') + (e.o.lk ? 'l' : '') + objSub(e.o)).join(','))
+      .map(L => layerObjects(L.id).map(e => objLabel(e.o) + (e.o.hid ? 'h' : '') + (e.o.lk ? 'l' : '') +
+        objSub(e.o) + ':' + objOpacity(e.o) + objBlend(e.o) + (e.o.color || '-')).join(','))
       .join(';');
   if (!force && sig === layerSig) { syncLayerBox(); return; }
   layerSig = sig;
@@ -2631,7 +2641,7 @@ function buildLayerPanel(force) {
 
     row.append(grip, tag, twist, eye, name, lock);
     row.addEventListener('click', (ev) => {
-      if (!rowClick(key, ev)) return;
+      if (!rowClick(key, ev)) { syncLayerBox(); return; }
       layEditing = L.id;
       if (L.kind === 'objects') setActiveLayer(L.id); else buildLayerPanel(true);
       syncLayerBox();
@@ -2706,13 +2716,34 @@ function toggleLayerLocked(id) {
     change, escape drops it, and an empty name is refused rather than leaving a
     layer with nothing to call it by. */
 function beginRename(row, L) {
-  const name = row.querySelector('.layname');
+  beginRenameRow(row, L.name, (v) => {
+    if (!v) return false;              // a layer with no name is not nameable
+    L.name = v;
+    return true;
+  });
+}
+
+/** Objects rename the same way, except that clearing the field is meaningful:
+    it drops the override and puts back the name the prop library or the label's
+    own text supplies. */
+function beginRenameObject(row, o) {
+  beginRenameRow(row, objLabel(o), (v) => {
+    if (!v) { delete o.nm; return true; }
+    if (v === objLabel({ ...o, nm: null })) { delete o.nm; return true; }
+    o.nm = v;
+    return true;
+  });
+}
+
+/** Turn the row's name into a field, in place. Enter or clicking away keeps the
+    change, escape drops it. `write` returns false to refuse the value. */
+function beginRenameRow(row, before, write) {
+  const name = row.querySelector('.layname, .objname');
   if (!name || name.querySelector('input')) return;
-  const before = L.name;
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'layrename';
-  input.maxLength = 28;
+  input.maxLength = 40;
   input.value = before;
   name.textContent = '';
   name.appendChild(input);
@@ -2724,14 +2755,12 @@ function beginRename(row, L) {
     if (done) return;
     done = true;
     const v = input.value.trim();
-    if (keep && v && v !== before) {
+    if (keep && v !== before) {
       snapshot();
-      L.name = v;
-      buildLayerPanel(true);
-      syncLayerBox();
-    } else {
-      buildLayerPanel(true);
+      if (!write(v)) { state.undo.pop(); updateUndoButtons(); }
     }
+    buildLayerPanel(true);
+    syncLayerBox();
   };
   input.addEventListener('keydown', (ev) => {
     ev.stopPropagation();          // the map's shortcuts are not wanted in here
@@ -2748,23 +2777,24 @@ function buildLayerColors() {
   const host = $('layColors');
   if (!host) return;
   host.textContent = '';
-  const L = layEditing == null ? null : layerById(state.map, layEditing);
+  const t = boxTarget();
+  const thing = t ? (t.kind === 'layer' ? t.L : t.o) : null;
+  const cur = thing ? thing.color || null : null;
   const pick = (hex) => {
-    if (!L) return;
+    if (!thing) return;
     snapshot();
-    L.color = hex;
+    if (hex) thing.color = hex; else delete thing.color;
     buildLayerPanel(true);
-    buildLayerColors();
   };
   const none = document.createElement('button');
-  none.className = 'layswatch none' + (L && !L.color ? ' on' : '');
+  none.className = 'layswatch none' + (thing && !cur ? ' on' : '');
   none.title = 'No tag';
   none.setAttribute('aria-label', 'No colour tag');
   none.addEventListener('click', () => pick(null));
   host.appendChild(none);
   for (const c of LAYER_COLORS) {
     const b = document.createElement('button');
-    b.className = 'layswatch' + (L && L.color === c.hex ? ' on' : '');
+    b.className = 'layswatch' + (cur === c.hex ? ' on' : '');
     b.style.background = c.hex;
     b.title = c.key;
     b.setAttribute('aria-label', 'Tag this layer ' + c.key);
@@ -2773,47 +2803,78 @@ function buildLayerColors() {
   }
 }
 
+/** What the settings box is editing: the one row picked, layer or object. Both
+    take the same three controls, so the box is one box. */
+function boxTarget() {
+  return rowSel.length === 1 ? rowTarget(rowSel[0]) : null;
+}
+
 function syncLayerBox() {
   const box = $('layerBox');
-  const L = layEditing == null ? null : layerById(state.map, layEditing);
-  box.classList.toggle('on', !!L);
-  if (!L) return;
-  const kind = LAYER_KINDS[L.kind];
-  $('layEditName').textContent = L.name;
-  $('layOpacity').value = L.opacity;
-  $('layOpacityLbl').textContent = Math.round(L.opacity * 100) + '%';
-  $('layBlend').value = L.blend || 'normal';
-  // blend has no meaning for a layer that has no pixels of its own, and the
-  // terrain has nothing beneath it to blend with
-  const canBlend = !kind.filter && L.kind !== 'terrain';
-  $('layBlendField').style.display = canBlend ? '' : 'none';
-  // Terrain is drawn straight onto an empty canvas, so fading it reveals the
-  // void and nothing else; the effects row keeps its strengths in Appearance.
-  // Neither gets a slider that would lie about what it does.
-  $('layOpacity').closest('.field').style.display = layerCanFade(L) ? '' : 'none';
-  $('layDelete').disabled = kind.pinned ||
-    (L.kind === 'objects' && objectLayers(state.map).length <= 1);
-  $('layMerge').disabled = L.kind !== 'objects';
-  $('laySelMove').disabled = L.kind !== 'objects' || (state.selected == null && state.selLabel == null);
-  $('layBlurb').textContent = kind.filter && L.kind !== 'effects'
-    ? kind.blurb + ' Opacity is how strong it is.'
-    : kind.blurb + (layerRenameable(L) ? ' Double-click the row to rename it.' : '');
-  buildLayerColors();
+  const t = boxTarget();
+  box.classList.toggle('on', !!t);
   const n = rowSel.length;
   $('layBulk').classList.toggle('on', n > 1);
   $('layBulkCount').textContent = n + ' rows selected';
+  if (!t) return;
+
+  const isLayer = t.kind === 'layer';
+  const L = isLayer ? t.L : null;
+  const o = isLayer ? null : t.o;
+  const kind = isLayer ? LAYER_KINDS[L.kind] : null;
+
+  $('layEditName').textContent = isLayer ? L.name : objLabel(o);
+
+  const opacity = isLayer ? L.opacity : objOpacity(o);
+  $('layOpacity').value = opacity;
+  $('layOpacityLbl').textContent = Math.round(opacity * 100) + '%';
+  // Terrain is drawn straight onto an empty canvas, so fading it reveals the
+  // void and nothing else; the effects row keeps its strengths in Appearance.
+  // Neither gets a slider that would lie about what it does.
+  const canFade = isLayer ? layerCanFade(L) : true;
+  $('layOpacity').closest('.field').style.display = canFade ? '' : 'none';
+
+  $('layBlend').value = isLayer ? (L.blend || 'normal') : objBlend(o);
+  // blend has no meaning for a layer that has no pixels of its own, and the
+  // terrain has nothing beneath it to blend with
+  const canBlend = isLayer ? (!kind.filter && L.kind !== 'terrain') : true;
+  $('layBlendField').style.display = canBlend ? '' : 'none';
+
+  $('layDelete').disabled = isLayer &&
+    (kind.pinned || (L.kind === 'objects' && objectLayers(state.map).length <= 1));
+  $('layMerge').disabled = !isLayer || L.kind !== 'objects';
+  $('laySelMove').disabled = !isLayer || L.kind !== 'objects' ||
+    (state.selected == null && state.selLabel == null);
+
+  $('layBlurb').textContent = isLayer
+    ? (kind.filter && L.kind !== 'effects'
+        ? kind.blurb + ' Opacity is how strong it is.'
+        : kind.blurb + (layerRenameable(L) ? ' Double-click the row to rename it.' : ''))
+    : 'One thing on the map, with the same controls its layer has. Double-click the row to '
+      + 'rename it, drag it to change what is on top of what. Fading something is a change to '
+      + 'the picture only: it still blocks sight and still gives light until you hide it.';
+  buildLayerColors();
 }
 
 function applyLayerEdits() {
-  const L = layEditing == null ? null : layerById(state.map, layEditing);
-  if (!L) return;
-  const kind = LAYER_KINDS[L.kind];
-  if (L.kind !== 'effects') L.opacity = num('layOpacity');
-  L.blend = $('layBlend').value;
-  $('layOpacityLbl').textContent = Math.round(L.opacity * 100) + '%';
-  $('layEditName').textContent = L.name;
-  buildLayerPanel();
-  refresh(false);
+  const t = boxTarget();
+  if (!t) return;
+  const isLayer = t.kind === 'layer';
+  const thing = isLayer ? t.L : t.o;
+  const op = num('layOpacity');
+  const blend = $('layBlend').value;
+  if (isLayer) {
+    if (layerCanFade(t.L)) t.L.opacity = op;
+    t.L.blend = blend;
+  } else {
+    // absent is the common case and the cheap path in the renderer, so a value
+    // back at its default is removed rather than written
+    if (op >= 0.999) delete thing.opacity; else thing.opacity = op;
+    if (blend === 'normal') delete thing.blend; else thing.blend = blend;
+  }
+  $('layOpacityLbl').textContent = Math.round(op * 100) + '%';
+  buildLayerPanel(true);
+  refresh(true);
 }
 
 /** Move the selected prop or label onto the layer whose settings are open. */
@@ -3035,6 +3096,8 @@ function setupLayerPanel() {
     // thing as the one in the bulk bar; two buttons disagreeing about scope is
     // how somebody loses four layers meaning to lose one
     if (rowSel.length > 1) { $('layBulkDelete').click(); return; }
+    const t = boxTarget();
+    if (t && t.kind !== 'layer') { deleteSelection(); return; }
     if (layEditing == null) return;
     const L = layerById(state.map, layEditing);
     if (!L) return;

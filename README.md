@@ -604,6 +604,10 @@ count beside the name says how much is in there before you open it.
 - **Click a row** to select that object. It becomes the live selection on the map, with its
   handles and toolbar, and the view scrolls to it if it was off screen. Selecting something
   on the map does the reverse: its layer unfolds and the tree scrolls to its row.
+- **A thing gets the same controls its layer has.** Picking one row opens the same settings
+  box a layer opens: its own **opacity**, its own **blend mode**, and its own **colour tag**.
+  Double-click the row to **rename** it — clear the field to put back the name the prop
+  library or the label's own text supplies.
 - **The eye** hides one object — and like a hidden layer, a hidden object stops blocking
   sight and stops giving light.
 - **The padlock** leaves it drawn but takes it out of the cursor's reach.
@@ -625,6 +629,11 @@ there.
 Only what you actually drag gets pinned; everything else keeps sorting itself, so putting
 one rug under one table doesn't freeze the depth ordering of the whole layer. The order is
 saved with the project.
+
+**Fading is a change to the picture only.** A prop at 20% still blocks line of sight and a
+torch at 20% still gives light, in the editor and in every export — hiding is the control
+that takes something out of the map. That split is deliberate: a ghost you can see through
+should still stop an arrow.
 
 The stack, the layer tags, the per-object flags and the hand-set order are all in the
 project file. A project made before layers existed opens with the default stack and

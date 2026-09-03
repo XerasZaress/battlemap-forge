@@ -209,8 +209,17 @@ function subLevels(list) {
   return [...seen].sort((a, b) => a - b);
 }
 
-/** A short, human name for an object, for the Objects list. */
+/* Opacity and blend on one object, the same two controls its layer has. Absent
+   is the common case and the cheap path, so both are read through a helper
+   rather than defaulted onto every object in the file. */
+function objOpacity(o) { return o.opacity === undefined ? 1 : o.opacity; }
+function objBlend(o) { return o.blend || 'normal'; }
+function objPlain(o) { return objOpacity(o) >= 0.999 && objBlend(o) === 'normal'; }
+
+/** A short, human name for an object, for the tree. A name the user typed wins
+    over the one the prop library or the label's own text supplies. */
 function objLabel(o) {
+  if (o.nm) return o.nm;
   if (o.text !== undefined) {
     const t = String(o.text).replace(/\s+/g, ' ').trim();
     return t ? (t.length > 22 ? t.slice(0, 21) + '…' : t) : 'Label';

@@ -235,7 +235,8 @@ function drawLabel(ctx, l, u) {
   const lineH = px * (l.lineH || 1.25);
 
   ctx.save();
-  ctx.globalAlpha = l.opacity === undefined ? 1 : clamp(l.opacity, 0, 1);
+  ctx.globalAlpha = clamp(objOpacity(l), 0, 1);
+  if (objBlend(l) !== 'normal') ctx.globalCompositeOperation = objBlend(l);
   ctx.translate(l.x * u, l.y * u);
   ctx.rotate(l.rot || 0);
   ctx.font = labelFontString(l, px);

@@ -564,6 +564,7 @@ button.danger:hover {
   min-width: 0; font-size: var(--fs-sm);
 }
 .objname b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.objname .layrename { margin: 0; }
 /* the sublayer, shown only when somebody has set one */
 .objname em {
   font-style: normal; color: var(--accent); font-size: var(--fs-xs);
