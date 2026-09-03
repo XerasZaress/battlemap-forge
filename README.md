@@ -517,9 +517,127 @@ or **Select**, to edit it; drag it to move it.
 With nothing selected the panel sets what the *next* label will look like, so writing three
 in the same hand takes one trip through the controls.
 
-Labels draw over everything — fog, baked lighting, the grid — and burn into the exported
-image. `Q`/`E` turn a selected label, `+`/`−` resize it, `D` duplicates, `⌫` deletes,
-`esc` deselects. The Erase tool and right-click remove one too.
+Labels are objects like any other: they live on the **Objects** layer, are lit and
+weathered along with everything else on it, and burn into the exported image. Put them on
+a layer above the *Light & weather* row if you want them to stay untouched by both. `Q`/`E` turn a selected label, `+`/`−`
+resize it, `D` duplicates, `⌫` deletes, `esc` deselects. The Erase tool and right-click
+remove one too.
+
+---
+
+## Layers
+
+Everything the renderer draws used to happen in one fixed order. That order is right most
+of the time, which is why it lasted, and wrong in exactly the places people care about.
+So it is data now: the **Layers** panel is the stack, and the renderer walks it.
+
+A new map ships with four layers, listed top of the stack first:
+
+| | |
+|---|---|
+| **Grid** | The lattice |
+| **Light & weather** | Baked light, the painted finish and the weather, in that order |
+| **Objects** | Everything you place — props and labels |
+| **Terrain** | The floor, walls, water and doors |
+
+Four rows, one for each thing that is genuinely a layer. Light, the painted finish and the
+weather share a row because each already has its own strength slider under Appearance —
+a per-row opacity would have been a third way to say the same thing — and because nobody
+reorders them separately. What that row is for is its **position**: everything below it is
+lit and weathered, everything above it escapes all three. Want GM notes that stay legible
+through fog? Put them on a layer above that row.
+
+Every row that can move carries a **grip** on its leading edge; drag it, or focus the row
+and hold `alt` with the arrow keys. Rows that cannot move — Terrain — leave the grip blank
+rather than offering a handle they won't honour. Click a row to make it the layer new work
+lands on, marked with a gold bar. The Prop tool and the Label tool each remember their own,
+so switching tool doesn't make you re-pick. **Terrain is pinned to the bottom**; it can
+still be hidden.
+
+**Double-click a layer's name to rename it in place.** Only the layers you made or fill
+yourself answer: Terrain, Light & weather and Grid are what they are, so they don't offer a
+field that would refuse the change. Enter keeps it, escape drops it.
+
+**Tag a layer a colour** from the swatches in its settings, and it gets a stripe down its
+leading edge — the quickest way to find the GM layer in a stack of nine.
+
+**Object layers** hold props and labels, and take an opacity *and* a blend mode — multiply,
+screen, overlay, soft light, darken, lighten. Terrain and Light & weather show no opacity
+slider: terrain is drawn straight onto an empty canvas so fading it reveals nothing but the
+void, and the effects carry their strengths under Appearance. Add as many as you like, merge one down into
+the one below, or delete one and everything on it. **Move selection here** sends the
+selected prop or label to the open layer. **Solo** shows only that layer.
+
+### Hiding a layer takes it out of the map
+
+Not just out of the picture. A hidden layer's props stop blocking line of sight and its
+torches stop giving light — in the editor, in the Universal VTT walls, and in the Foundry
+scene. That is the point: put the traps, the secret doors and the GM's notes on their own
+layer, and you have two exports off one map.
+
+**Locking** leaves a layer drawn but lets the cursor straight through it. Lock the
+undergrowth you scattered and it stops grabbing the pointer while you place the ambush.
+
+### Selecting more than one row
+
+The tree behaves like a file list. **Ctrl-click** (or ⌘-click) adds a row to the selection
+or takes it out again; **shift-click** takes everything between the last row you touched
+and this one. Layers and the things on them can be picked together.
+
+With more than one row selected, **the eye and the padlock act on all of it** — hiding nine
+layers is one gesture, not nine — and a bar appears under the stack with the count and a
+delete that takes the lot. Terrain and the last remaining object layer are refused rather
+than quietly skipped, and the toast says how many went.
+
+---
+
+## What is on a layer
+
+A layer holds things, so the things live under it. Click the twisty on an object layer and
+it unfolds into one row per prop and per label on it, indented under the layer, with a
+thumbnail and a name. Once a wood has thirty trees in it, the one behind the rock is
+findable in a list and not on the map.
+
+Layers start folded, because an unfolded wood would bury the stack it is part of. The
+count beside the name says how much is in there before you open it.
+
+- **Click a row** to select that object. It becomes the live selection on the map, with its
+  handles and toolbar, and the view scrolls to it if it was off screen. Selecting something
+  on the map does the reverse: its layer unfolds and the tree scrolls to its row.
+- **A thing gets the same controls its layer has.** Picking one row opens the same settings
+  box a layer opens: its own **opacity**, its own **blend mode**, and its own **colour tag**.
+  Double-click the row to **rename** it — clear the field to put back the name the prop
+  library or the label's own text supplies.
+- **The eye** hides one object — and like a hidden layer, a hidden object stops blocking
+  sight and stops giving light.
+- **The padlock** leaves it drawn but takes it out of the cursor's reach.
+- **Search** at the top of the panel filters by name and unfolds every object layer, since
+  a hit inside a folded layer is the same as no hit at all.
+
+The two buttons beside the search box hide or lock **every row the tree is currently
+showing** — so a folded layer is out of reach, and searching `torch` before pressing the
+padlock locks the torches and nothing else.
+
+### Ordering things by hand
+
+Two things sitting on the same square are ordered automatically — flat things under
+standing things, nearer things last — which is what makes a wood of forty trees overlap
+correctly without anybody arranging it. When you want something specific, **drag its row**:
+up the list is nearer the viewer, and dropping it inside another layer's block moves it
+there.
+
+Only what you actually drag gets pinned; everything else keeps sorting itself, so putting
+one rug under one table doesn't freeze the depth ordering of the whole layer. The order is
+saved with the project.
+
+**Fading is a change to the picture only.** A prop at 20% still blocks line of sight and a
+torch at 20% still gives light, in the editor and in every export — hiding is the control
+that takes something out of the map. That split is deliberate: a ghost you can see through
+should still stop an arrow.
+
+The stack, the layer tags, the per-object flags and the hand-set order are all in the
+project file. A project made before layers existed opens with the default stack and
+everything on **Objects**.
 
 ---
 
@@ -680,6 +798,7 @@ js/generate.js    the map generators
 js/render.js      the renderer, including the grid lattices
 js/atmosphere.js  weather, time of day and colour grading
 js/labels.js      text on the map
+js/layers.js      the draw stack, the per-object flags and the sublayer order
 js/exporters.js   wall extraction and the VTT file formats
 js/app.js         interface, tools, undo, export wiring
 

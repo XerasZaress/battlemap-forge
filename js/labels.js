@@ -136,9 +136,16 @@ function labelHit(l, fx, fy) {
 }
 
 /** Topmost label under the point, or null. Later labels sit over earlier ones. */
-function pickLabel(map, fx, fy) {
+/* `editableOnly` keeps the cursor off labels on a hidden or locked layer, the
+   same rule the props follow. Drawing ignores it: a locked layer still shows. */
+function pickLabel(map, fx, fy, editableOnly) {
   const list = map.labels || [];
-  for (let i = list.length - 1; i >= 0; i--) if (labelHit(list[i], fx, fy)) return i;
+  // topmost first, which with sublayers is no longer simply the last written
+  const order = list.map((l, i) => i).sort((a, b) => objSub(list[b]) - objSub(list[a]) || b - a);
+  for (const i of order) {
+    if (editableOnly && !objEditable(map, list[i])) continue;
+    if (labelHit(list[i], fx, fy)) return i;
+  }
   return null;
 }
 
@@ -228,7 +235,8 @@ function drawLabel(ctx, l, u) {
   const lineH = px * (l.lineH || 1.25);
 
   ctx.save();
-  ctx.globalAlpha = l.opacity === undefined ? 1 : clamp(l.opacity, 0, 1);
+  ctx.globalAlpha = clamp(objOpacity(l), 0, 1);
+  if (objBlend(l) !== 'normal') ctx.globalCompositeOperation = objBlend(l);
   ctx.translate(l.x * u, l.y * u);
   ctx.rotate(l.rot || 0);
   ctx.font = labelFontString(l, px);
@@ -246,5 +254,6 @@ function drawLabel(ctx, l, u) {
 function drawLabels(ctx, map, u) {
   const list = map.labels;
   if (!list || !list.length) return;
-  for (const l of list) drawLabel(ctx, l, u);
+  const shown = list.filter(l => objVisible(map, l)).sort((a, b) => objSub(a) - objSub(b));
+  for (const l of shown) drawLabel(ctx, l, u);
 }

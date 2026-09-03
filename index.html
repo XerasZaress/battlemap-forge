@@ -409,6 +409,45 @@
       </div>
     </section>
 
+    <section class="group" data-group="layers">
+      <h2>Layers <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
+      <p class="hint" style="margin-top:0">The order things are drawn in, top of the stack first.
+        Drag a row to move it. Click a row to make it the one new work lands on.</p>
+      <div class="objhead">
+        <input type="search" id="objSearch" class="pickersearch" placeholder="Search things on the map…" autocomplete="off">
+        <button id="objHideAll" class="sm iconbtn" title="Hide everything the tree is showing" aria-label="Hide everything the tree is showing"><i data-icon="eyeoff"></i></button>
+        <button id="objLockAll" class="sm iconbtn" title="Lock everything the tree is showing" aria-label="Lock everything the tree is showing"><i data-icon="lock"></i></button>
+      </div>
+      <div class="layerlist" id="layerList"></div>
+      <div class="row2" style="margin-top:8px">
+        <button id="layAdd" class="sm">Add layer</button>
+        <button id="layMerge" class="sm">Merge down</button>
+      </div>
+      <div id="layBulk" class="laybulk">
+        <span id="layBulkCount">0 rows selected</span>
+        <button id="layBulkHide" class="sm">Hide / show</button>
+        <button id="layBulkDelete" class="sm danger"><i data-icon="trash"></i> Delete</button>
+      </div>
+      <div id="layerBox" class="layerbox">
+        <div class="tformhead"><span id="layEditName">Layer</span>
+          <button id="layDelete" class="sm danger" title="Delete this layer and everything on it"><i data-icon="trash"></i></button>
+        </div>
+        <label class="field"><span>Opacity <b id="layOpacityLbl">100%</b></span>
+          <input type="range" id="layOpacity" min="0" max="1" step="0.02" value="1"></label>
+        <label class="field" id="layBlendField"><span>Blend</span>
+          <select id="layBlend"></select></label>
+        <div class="field"><span>Tag</span><div class="layswatches" id="layColors"></div></div>
+        <p class="hint" id="layBlurb" style="margin:6px 0 0"></p>
+      </div>
+      <div class="row2" style="margin-top:9px">
+        <button id="laySelMove" class="sm">Move selection here</button>
+        <button id="layIsolate" class="sm">Solo</button>
+      </div>
+      <p class="hint" style="margin-top:9px">Hiding a layer takes it out of the map entirely:
+        its props stop blocking sight and its torches stop giving light, in the editor and in
+        every export. That is how you get a players' copy of a map with the GM's notes on it.</p>
+    </section>
+
     <section class="group" data-group="terrain">
       <h2>Terrain <button type="button" class="chev" title="Close this panel" aria-label="Close this panel"><i data-icon="x"></i></button></h2>
       <div class="swatches" id="swatches"></div>
@@ -586,6 +625,7 @@
     <button data-side="right" data-panel="props" title="Props" aria-label="Props"><i data-icon="chair"></i></button>
     <button data-side="right" data-panel="prefabs" title="Prefab rooms" aria-label="Prefab rooms"><i data-icon="house"></i></button>
     <button data-side="right" data-panel="labels" title="Labels" aria-label="Labels"><i data-icon="text"></i></button>
+    <button data-side="right" data-panel="layers" title="Layers" aria-label="Layers"><i data-icon="layers"></i></button>
     <button data-side="right" data-panel="stats" title="Map info" aria-label="Map info"><i data-icon="info"></i></button>
   </nav>
 
@@ -762,6 +802,7 @@
 <script src="js/shadows.js"></script>
 <script src="js/render.js"></script>
 <script src="js/atmosphere.js"></script>
+<script src="js/layers.js"></script>
 <script src="js/labels.js"></script>
 <script src="js/exporters.js"></script>
 <script src="js/autotrace.js"></script>
