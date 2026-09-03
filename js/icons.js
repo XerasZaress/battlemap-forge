@@ -55,6 +55,7 @@ const ICONS = {
   trash: '<path d="M4 6.5h16"/><path d="M9.5 3.5h5v3h-5z"/><path d="M6 6.5l1 13.5a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13.5"/><path d="M10.5 10.5v6M13.5 10.5v6"/>',
   pencil: '<path d="M16.5 3.5l4 4L8 20l-5 1 1-5z"/><path d="M13.5 6.5l4 4"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.4-4.4"/>',
+  grip: '<circle cx="9" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.4" fill="currentColor" stroke="none"/>',
   chevRight: '<path d="M9.5 5.5 16 12l-6.5 6.5"/>',
   list: '<path d="M8 6.5h12M8 12h12M8 17.5h12"/><circle cx="4" cy="6.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="4" cy="17.5" r="1.3" fill="currentColor" stroke="none"/>',
   layers: '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3.5 12.2L12 17l8.5-4.8"/><path d="M3.5 16.2L12 21l8.5-4.8"/>',

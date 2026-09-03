@@ -547,13 +547,24 @@ reorders them separately. What that row is for is its **position**: everything b
 lit and weathered, everything above it escapes all three. Want GM notes that stay legible
 through fog? Put them on a layer above that row.
 
-Drag a row to move it, or focus one and hold `alt` with the arrow keys. Click a row to make
-it the layer new work lands on — marked with a gold bar down its leading edge. The Prop
-tool and the Label tool each remember their own, so switching tool doesn't make you
-re-pick. **Terrain is pinned to the bottom**; it can still be hidden.
+Every row that can move carries a **grip** on its leading edge; drag it, or focus the row
+and hold `alt` with the arrow keys. Rows that cannot move — Terrain — leave the grip blank
+rather than offering a handle they won't honour. Click a row to make it the layer new work
+lands on, marked with a gold bar. The Prop tool and the Label tool each remember their own,
+so switching tool doesn't make you re-pick. **Terrain is pinned to the bottom**; it can
+still be hidden.
+
+**Double-click a layer's name to rename it in place.** Only the layers you made or fill
+yourself answer: Terrain, Light & weather and Grid are what they are, so they don't offer a
+field that would refuse the change. Enter keeps it, escape drops it.
+
+**Tag a layer a colour** from the swatches in its settings, and it gets a stripe down its
+leading edge — the quickest way to find the GM layer in a stack of nine.
 
 **Object layers** hold props and labels, and take an opacity *and* a blend mode — multiply,
-screen, overlay, soft light, darken, lighten. Add as many as you like, merge one down into
+screen, overlay, soft light, darken, lighten. Terrain and Light & weather show no opacity
+slider: terrain is drawn straight onto an empty canvas so fading it reveals nothing but the
+void, and the effects carry their strengths under Appearance. Add as many as you like, merge one down into
 the one below, or delete one and everything on it. **Move selection here** sends the
 selected prop or label to the open layer. **Solo** shows only that layer.
 
@@ -566,6 +577,17 @@ layer, and you have two exports off one map.
 
 **Locking** leaves a layer drawn but lets the cursor straight through it. Lock the
 undergrowth you scattered and it stops grabbing the pointer while you place the ambush.
+
+### Selecting more than one row
+
+The tree behaves like a file list. **Ctrl-click** (or ⌘-click) adds a row to the selection
+or takes it out again; **shift-click** takes everything between the last row you touched
+and this one. Layers and the things on them can be picked together.
+
+With more than one row selected, **the eye and the padlock act on all of it** — hiding nine
+layers is one gesture, not nine — and a bar appears under the stack with the count and a
+delete that takes the lot. Terrain and the last remaining object layer are refused rather
+than quietly skipped, and the toast says how many went.
 
 ---
 
@@ -592,19 +614,21 @@ The two buttons beside the search box hide or lock **every row the tree is curre
 showing** — so a folded layer is out of reach, and searching `torch` before pressing the
 padlock locks the torches and nothing else.
 
-### Sublayer
+### Ordering things by hand
 
-Selecting an object gives it a **Sublayer** — a number from −9 to 9 deciding which of two
-things sitting in the same place is on top. Higher is nearer the viewer. It exists because
-a whole layer is a heavy instrument for getting one rug under one table.
+Two things sitting on the same square are ordered automatically — flat things under
+standing things, nearer things last — which is what makes a wood of forty trees overlap
+correctly without anybody arranging it. When you want something specific, **drag its row**:
+up the list is nearer the viewer, and dropping it inside another layer's block moves it
+there.
 
-Objects that share a sublayer keep the order they always had — flat things under standing
-things, nearer things last — so the number is only consulted when you have actually set
-one, and setting it on a rug doesn't disturb how everything else was already arranged.
+Only what you actually drag gets pinned; everything else keeps sorting itself, so putting
+one rug under one table doesn't freeze the depth ordering of the whole layer. The order is
+saved with the project.
 
-The stack, the per-object flags and the sublayers are all saved in the project file. A
-project made before layers existed opens with the default stack and everything on
-**Objects**.
+The stack, the layer tags, the per-object flags and the hand-set order are all in the
+project file. A project made before layers existed opens with the default stack and
+everything on **Objects**.
 
 ---
 

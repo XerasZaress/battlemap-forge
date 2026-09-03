@@ -62,6 +62,27 @@ const LAYER_KINDS = {
 /* Which of the old per-effect rows collapse into the one that replaced them. */
 const LEGACY_EFFECT_KINDS = { lighting: 1, finish: 1, atmos: 1 };
 
+/* Tags for the leading edge of a layer row. Eight is enough to tell a stack
+   apart at a glance and few enough to pick from without a colour wheel; they
+   are the hues the rest of the interface already uses, at a saturation that
+   survives being three pixels wide. */
+const LAYER_COLORS = [
+  { key: 'red', hex: '#d4574e' }, { key: 'amber', hex: '#d99a3c' },
+  { key: 'gold', hex: '#c9a227' }, { key: 'green', hex: '#5c9e5c' },
+  { key: 'teal', hex: '#3f9c9c' }, { key: 'blue', hex: '#4f86c6' },
+  { key: 'violet', hex: '#8a72c4' }, { key: 'rose', hex: '#c46f9b' }
+];
+
+/** Can this layer be renamed? Only the ones the user made or fills themselves:
+    Terrain, Light & weather and Grid are what they are, and an input that
+    refuses the change is worse than no input. */
+function layerRenameable(L) { return !!L && !LAYER_KINDS[L.kind].unique; }
+
+/** Does a fade actually do anything here? Terrain is drawn straight onto an
+    empty canvas, so fading it reveals nothing but the void behind it, and the
+    effects row carries its strengths in Appearance instead. */
+function layerCanFade(L) { return !!L && L.kind !== 'terrain' && L.kind !== 'effects'; }
+
 /* A deliberately short list. Every one of these does something legible on a
    map; the rest of the CSS blend modes mostly produce mud over brown floors. */
 const LAYER_BLENDS = [
@@ -86,7 +107,8 @@ function makeLayer(id, kind, name, extra) {
     visible: true,
     locked: false,
     opacity: 1,
-    blend: 'normal'
+    blend: 'normal',
+    color: null        // a tag down the leading edge of the row; null is untagged
   }, extra || {});
 }
 

@@ -2079,6 +2079,206 @@ function layerObjects(id) {
 /* Which layers are unfolded. View state, not map state: it belongs to this
    session's panel and not in anybody's project file. Layers start folded —
    a wood with forty trees in it would otherwise bury the stack it is part of. */
+/* ---------------- selecting rows in the stack ----------------
+   The tree behaves like a file list: click takes one row, ctrl-click adds or
+   removes one, shift-click takes everything between the anchor and here. What
+   that buys is bulk — the eye and the delete act on the whole selection, so
+   hiding nine layers is one gesture rather than nine.
+
+   A row is keyed by what it is: `L:<id>` for a layer, `p:<i>` / `l:<i>` for a
+   prop or a label. Object keys are array indices, which move when something is
+   deleted, so the selection is dropped after any structural change rather than
+   being carried onto whatever slid into that slot. */
+
+let rowSel = [];        // keys, in no particular order
+let rowAnchor = null;   // where a shift-range measures from
+let rowOrder = [];      // every key the tree is showing, top to bottom
+
+const layerKey = (id) => 'L:' + id;
+const objKey = (e) => (e.kind === 'label' ? 'l:' : 'p:') + e.i;
+
+function rowSelected(key) { return rowSel.indexOf(key) >= 0; }
+function clearRowSel() { rowSel = []; rowAnchor = null; }
+
+/** The object or layer a key names, or null if it no longer exists. */
+function rowTarget(key) {
+  const map = state.map;
+  const n = parseInt(key.slice(2), 10);
+  if (key[0] === 'L') { const L = layerById(map, n); return L ? { kind: 'layer', L } : null; }
+  if (key[0] === 'p') { const o = map.props[n]; return o ? { kind: 'prop', o, i: n } : null; }
+  const o = (map.labels || [])[n];
+  return o ? { kind: 'label', o, i: n } : null;
+}
+
+function selectedRowTargets() {
+  return rowSel.map(rowTarget).filter(Boolean);
+}
+
+/** Click behaviour shared by every row in the tree. Returns true when the
+    caller's own single-row action (open the layer, select the prop) should
+    still run — that is, when this was a plain click. */
+function rowClick(key, ev) {
+  if (ev.shiftKey && rowAnchor) {
+    const a = rowOrder.indexOf(rowAnchor), b = rowOrder.indexOf(key);
+    if (a >= 0 && b >= 0) {
+      rowSel = rowOrder.slice(Math.min(a, b), Math.max(a, b) + 1);
+      buildLayerPanel(true);
+      return false;
+    }
+  }
+  if (ev.metaKey || ev.ctrlKey) {
+    const at = rowSel.indexOf(key);
+    if (at >= 0) rowSel.splice(at, 1); else rowSel.push(key);
+    rowAnchor = key;
+    buildLayerPanel(true);
+    return false;
+  }
+  rowSel = [key];
+  rowAnchor = key;
+  return true;
+}
+
+/* ---------------- bulk actions over a selection ---------------- */
+
+/** The eye on a row that is part of a multi-selection acts on all of it, so
+    that what you selected is what you hid. On a row outside the selection it
+    is just that row's eye. */
+function bulkVisible(key, fallback) {
+  if (!rowSelected(key) || rowSel.length < 2) { fallback(); return; }
+  const targets = selectedRowTargets();
+  if (!targets.length) { fallback(); return; }
+  snapshot();
+  // all shown means hide the lot; anything hidden means show the lot
+  const allShown = targets.every(t => t.kind === 'layer' ? t.L.visible : !t.o.hid);
+  for (const t of targets) {
+    if (t.kind === 'layer') t.L.visible = !allShown;
+    else if (allShown) t.o.hid = true;
+    else delete t.o.hid;
+  }
+  if (allShown) { deselectProp(); deselectLabel(); }
+  syncLightsFromProps(state.map);
+  buildLayerPanel(true);
+  refresh(true);
+}
+
+/** Same idea for the padlock. */
+function bulkLocked(key, fallback) {
+  if (!rowSelected(key) || rowSel.length < 2) { fallback(); return; }
+  const targets = selectedRowTargets();
+  if (!targets.length) { fallback(); return; }
+  snapshot();
+  const allOpen = targets.every(t => t.kind === 'layer' ? !t.L.locked : !t.o.lk);
+  for (const t of targets) {
+    if (t.kind === 'layer') t.L.locked = allOpen;
+    else if (allOpen) t.o.lk = true;
+    else delete t.o.lk;
+  }
+  if (allOpen) { deselectProp(); deselectLabel(); }
+  buildLayerPanel(true);
+  refresh(false);
+}
+
+/** Delete everything selected. Layers that cannot go — the pinned ones, and the
+    last object layer — are left alone and counted, because silently keeping a
+    row the user asked to delete is worse than saying why. */
+function deleteSelection() {
+  const map = state.map;
+  const targets = selectedRowTargets();
+  if (!targets.length) return;
+  const props = [], labels = [], layers = [];
+  let refused = 0;
+  for (const t of targets) {
+    if (t.kind === 'prop') props.push(t.i);
+    else if (t.kind === 'label') labels.push(t.i);
+    else if (LAYER_KINDS[t.L.kind].pinned) refused++;
+    else layers.push(t.L);
+  }
+  const objectLayersGoing = layers.filter(L => L.kind === 'objects').length;
+  if (objectLayersGoing && objectLayers(map).length - objectLayersGoing < 1) {
+    toast('A map needs one object layer to put things on.');
+    return;
+  }
+  if (!props.length && !labels.length && !layers.length) {
+    toast(refused ? 'Terrain cannot be deleted.' : 'Nothing to delete.');
+    return;
+  }
+  snapshot();
+  // by descending index, so removing one does not renumber the next
+  props.sort((a, b) => b - a).forEach(i => map.props.splice(i, 1));
+  labels.sort((a, b) => b - a).forEach(i => map.labels.splice(i, 1));
+  for (const L of layers) removeLayer(map, L.id);
+  clearRowSel();
+  layEditing = null;
+  deselectProp(); deselectLabel();
+  syncLightsFromProps(map);
+  buildLayerPanel(true);
+  refresh(true);
+  const n = props.length + labels.length + layers.length;
+  toast(refused ? `Deleted ${n}; terrain cannot be deleted.` : `Deleted ${n}.`);
+}
+
+/* ---------------- dragging a thing to a new depth ----------------
+   The sublayer used to be a slider, which asked you to think in numbers about
+   a question that is entirely visual. Dragging the row says the same thing by
+   showing it.
+
+   `sub` stays the storage and stays a number, but it is a fraction now, so
+   there is always room between two neighbours. Everything that has never been
+   dragged sits at 0 and keeps sorting itself the automatic way — flat things
+   under standing things, nearer things last — which is what makes a wood of
+   forty trees overlap correctly without anybody ordering it by hand. Only what
+   you actually drag gets a number of its own. */
+
+/** The sublayer that puts `moving` where it was dropped: between the row above
+    the gap and the row below it, in the layer's displayed order. */
+function subForDrop(layerId, moving, idx) {
+  const order = objectRowsFor(layerId, '').filter(e => e.o !== moving);   // topmost first
+  const above = order[idx - 1];      // nearer the viewer
+  const below = order[idx];
+  if (!above && !below) return 0;
+  if (!above) return objSub(below.o) + 1;
+  if (!below) return objSub(above.o) - 1;
+  const hi = objSub(above.o), lo = objSub(below.o);
+  if (hi > lo) return (hi + lo) / 2;
+  // Both neighbours share a sublayer, so no number lands between them: the gap
+  // is inside a band the automatic rule is ordering. Spread that band out —
+  // just that band — and the gap becomes expressible.
+  spreadBand(layerId, hi, moving);
+  return subForDrop(layerId, moving, idx);
+}
+
+/** Give every object sitting at sublayer `band` an explicit sublayer, keeping
+    the order they are already drawn in, so there is room to insert between any
+    two of them. Touches one band and leaves every other alone. */
+function spreadBand(layerId, band, skip) {
+  const inBand = objectRowsFor(layerId, '').filter(e => e.o !== skip && objSub(e.o) === band);
+  if (inBand.length < 2) return;
+  // topmost first, so they descend from band + a half to band - a half
+  const step = 1 / (inBand.length + 1);
+  inBand.forEach((e, n) => { e.o.sub = band + 0.5 - step * (n + 1); });
+}
+
+/** Move an object to a new place in the tree: a new depth inside its layer, a
+    different layer, or both. */
+function dropObject(key, targetLayerId, idx) {
+  const t = rowTarget(key);
+  if (!t || t.kind === 'layer') return;
+  const map = state.map;
+  const L = layerById(map, targetLayerId);
+  if (!L || L.kind !== 'objects') return;
+  snapshot();
+  if (t.o.lay !== targetLayerId) {
+    t.o.lay = targetLayerId;
+    delete t.o.sub;                    // a depth measured against its old company
+  }
+  const sub = subForDrop(targetLayerId, t.o, idx);
+  if (sub) t.o.sub = sub; else delete t.o.sub;
+  layOpen.add(targetLayerId);
+  clearRowSel();
+  buildLayerPanel(true);
+  refresh(true);
+}
+
 const layOpen = new Set();
 
 function toggleLayerOpen(id) {
@@ -2134,18 +2334,31 @@ function appendObjectRows(host, L, q) {
   for (const e of rows) {
     const row = document.createElement('div');
     row.className = 'objrow';
+    const key = objKey(e);
+    row.dataset.key = key;
+    row.dataset.lay = L.id;
     const sel = (e.kind === 'prop' && state.selected === e.i) ||
                 (e.kind === 'label' && state.selLabel === e.i);
     if (sel) row.classList.add('active');
+    if (rowSelected(key)) row.classList.add('picked');
     if (e.o.hid) row.classList.add('hidden');
     row.tabIndex = 0;
     row.setAttribute('role', 'button');
+    rowOrder.push(key);
+
+    const grip = document.createElement('span');
+    grip.className = 'laygrip';
+    grip.innerHTML = '<i data-icon="grip"></i>';
+    grip.title = 'Drag to change what is on top';
 
     const eye = document.createElement('button');
     eye.className = 'laytoggle';
     eye.innerHTML = '<i data-icon="' + (e.o.hid ? 'eyeoff' : 'eye') + '"></i>';
     eye.title = e.o.hid ? 'Show this' : 'Hide this';
-    eye.addEventListener('click', (ev) => { ev.stopPropagation(); toggleObjFlag(e, 'hid'); });
+    eye.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      bulkVisible(key, () => toggleObjFlag(e, 'hid'));
+    });
 
     const thumb = objThumb(e.o);
     thumb.className = 'objthumb';
@@ -2166,13 +2379,17 @@ function appendObjectRows(host, L, q) {
     lock.className = 'laytoggle' + (e.o.lk ? ' on' : '');
     lock.innerHTML = '<i data-icon="' + (e.o.lk ? 'lock' : 'unlock') + '"></i>';
     lock.title = e.o.lk ? 'Unlock this' : 'Lock this so the cursor ignores it';
-    lock.addEventListener('click', (ev) => { ev.stopPropagation(); toggleObjFlag(e, 'lk'); });
+    lock.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      bulkLocked(key, () => toggleObjFlag(e, 'lk'));
+    });
 
-    row.append(eye, name, lock);
-    const choose = () => selectFromObjectList(e);
-    row.addEventListener('click', choose);
+    row.append(grip, eye, name, lock);
+    row.addEventListener('click', (ev) => {
+      if (rowClick(key, ev)) selectFromObjectList(e);
+    });
     row.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); choose(); }
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); rowSel = [key]; rowAnchor = key; selectFromObjectList(e); }
     });
     host.appendChild(row);
   }
@@ -2246,26 +2463,6 @@ function selectedObjectEntry() {
   return null;
 }
 
-function syncObjSelBox() {
-  const e = selectedObjectEntry();
-  $('objSelBox').classList.toggle('on', !!e);
-  if (!e) return;
-  $('objSub').value = objSub(e.o);
-  $('objSubLbl').textContent = objSub(e.o);
-}
-
-function applyObjSub() {
-  const e = selectedObjectEntry();
-  if (!e) return;
-  const v = parseInt($('objSub').value, 10) || 0;
-  if (objSub(e.o) === v) return;
-  snapshot();
-  if (v) e.o.sub = v; else delete e.o.sub;
-  $('objSubLbl').textContent = v;
-  buildLayerPanel(true);
-  refresh(false);
-}
-
 function setupObjectsPanel() {
   // a search unfolds every object layer, because a hit inside a folded one you
   // cannot see is the same as no hit at all
@@ -2275,7 +2472,6 @@ function setupObjectsPanel() {
   });
   $('objHideAll').addEventListener('click', () => objBulk('hid'));
   $('objLockAll').addEventListener('click', () => objBulk('lk'));
-  $('objSub').addEventListener('input', applyObjSub);
 }
 
 /* ---------------- the layer stack ----------------
@@ -2326,7 +2522,7 @@ function layerPanelSig(map, activeId) {
   const parts = [activeId, layEditing];
   for (const L of map.layers) {
     const c = L.kind === 'objects' ? layerCounts(map, L.id).total : 0;
-    parts.push(L.id, L.kind, L.name, L.visible ? 1 : 0, L.locked ? 1 : 0, c);
+    parts.push(L.id, L.kind, L.name, L.visible ? 1 : 0, L.locked ? 1 : 0, c, L.color || '-');
   }
   return parts.join('|');
 }
@@ -2341,13 +2537,19 @@ function buildLayerPanel(force) {
   if (layEditing != null && !layerById(map, layEditing)) layEditing = null;
   const q = objQuery();
   const sig = layerPanelSig(map, activeId) + '|' + q + '|' + [...layOpen].sort().join(',') +
+    '|' + rowSel.join(',') +
     '|' + state.selected + '|' + state.selLabel + '|' +
     map.layers.filter(L => L.kind === 'objects' && layOpen.has(L.id))
       .map(L => layerObjects(L.id).map(e => objLabel(e.o) + (e.o.hid ? 'h' : '') + (e.o.lk ? 'l' : '') + objSub(e.o)).join(','))
       .join(';');
-  if (!force && sig === layerSig) { syncLayerBox(); syncObjSelBox(); return; }
+  if (!force && sig === layerSig) { syncLayerBox(); return; }
   layerSig = sig;
   host.textContent = '';
+  rowOrder = [];
+  // a selection is keyed by array index, so anything that no longer resolves is
+  // dropped rather than pointing at whatever slid into its slot
+  rowSel = rowSel.filter(k => rowTarget(k));
+  if (rowAnchor && !rowTarget(rowAnchor)) rowAnchor = null;
 
   // top of the stack first
   for (let i = map.layers.length - 1; i >= 0; i--) {
@@ -2356,6 +2558,10 @@ function buildLayerPanel(force) {
     const row = document.createElement('div');
     row.className = 'layerrow';
     row.dataset.id = L.id;
+    const key = layerKey(L.id);
+    row.dataset.key = key;
+    rowOrder.push(key);
+    if (rowSelected(key)) row.classList.add('picked');
     if (L.id === layEditing) row.classList.add('editing');
     if (L.kind === 'objects' && L.id === activeId) row.classList.add('active');
     if (!L.visible) row.classList.add('hidden');
@@ -2384,11 +2590,28 @@ function buildLayerPanel(force) {
       twist.setAttribute('aria-hidden', 'true');
     }
 
+    // a grip on everything that can be dragged, and nothing that cannot, so the
+    // stack says which rows will move before you try one
+    const grip = document.createElement('span');
+    grip.className = 'laygrip' + (kind.pinned ? ' blank' : '');
+    if (!kind.pinned) {
+      grip.innerHTML = '<i data-icon="grip"></i>';
+      grip.title = 'Drag to move this layer up or down the stack';
+    }
+
+    const tag = document.createElement('span');
+    tag.className = 'laytag';
+    if (L.color) tag.style.background = L.color;
+    else tag.classList.add('untagged');
+
     const eye = document.createElement('button');
     eye.className = 'laytoggle';
     eye.innerHTML = '<i data-icon="' + (L.visible ? 'eye' : 'eyeoff') + '"></i>';
     eye.title = L.visible ? 'Hide this layer' : 'Show this layer';
-    eye.addEventListener('click', (ev) => { ev.stopPropagation(); toggleLayerVisible(L.id); });
+    eye.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      bulkVisible(key, () => toggleLayerVisible(L.id));
+    });
 
     const name = document.createElement('span');
     name.className = 'layname';
@@ -2401,14 +2624,26 @@ function buildLayerPanel(force) {
     lock.innerHTML = '<i data-icon="' + (L.locked ? 'lock' : 'unlock') + '"></i>';
     lock.title = L.locked ? 'Unlock this layer' : 'Lock this layer so the cursor ignores it';
     lock.disabled = kind.pinned && L.kind !== 'terrain';
-    lock.addEventListener('click', (ev) => { ev.stopPropagation(); toggleLayerLocked(L.id); });
+    lock.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      bulkLocked(key, () => toggleLayerLocked(L.id));
+    });
 
-    row.append(twist, eye, name, lock);
-    row.addEventListener('click', () => {
+    row.append(grip, tag, twist, eye, name, lock);
+    row.addEventListener('click', (ev) => {
+      if (!rowClick(key, ev)) return;
       layEditing = L.id;
       if (L.kind === 'objects') setActiveLayer(L.id); else buildLayerPanel(true);
       syncLayerBox();
     });
+    // renaming happens on the row, where the name is. Only the layers that can
+    // actually be renamed respond, so the gesture never fails silently.
+    if (layerRenameable(L)) {
+      row.addEventListener('dblclick', (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        beginRename(row, L);
+      });
+    }
     host.appendChild(row);
 
     // the layer's contents, indented under it, as part of the same list so the
@@ -2423,7 +2658,6 @@ function buildLayerPanel(force) {
   wireLayerDrag(host);
   renderIcons(host);
   syncLayerBox();
-  syncObjSelBox();
   $('layAdd').disabled = map.layers.length >= LAYER_MAX;
   // unfolding to reveal a selection is only half the job if the row it revealed
   // is past the bottom of a list forty rows long
@@ -2468,6 +2702,77 @@ function toggleLayerLocked(id) {
   paint();
 }
 
+/** Turn the row's name into a field, in place. Enter or clicking away keeps the
+    change, escape drops it, and an empty name is refused rather than leaving a
+    layer with nothing to call it by. */
+function beginRename(row, L) {
+  const name = row.querySelector('.layname');
+  if (!name || name.querySelector('input')) return;
+  const before = L.name;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'layrename';
+  input.maxLength = 28;
+  input.value = before;
+  name.textContent = '';
+  name.appendChild(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const finish = (keep) => {
+    if (done) return;
+    done = true;
+    const v = input.value.trim();
+    if (keep && v && v !== before) {
+      snapshot();
+      L.name = v;
+      buildLayerPanel(true);
+      syncLayerBox();
+    } else {
+      buildLayerPanel(true);
+    }
+  };
+  input.addEventListener('keydown', (ev) => {
+    ev.stopPropagation();          // the map's shortcuts are not wanted in here
+    if (ev.key === 'Enter') { ev.preventDefault(); finish(true); }
+    else if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
+  });
+  input.addEventListener('blur', () => finish(true));
+  input.addEventListener('click', (ev) => ev.stopPropagation());
+  input.addEventListener('dblclick', (ev) => ev.stopPropagation());
+}
+
+/** The colour tags, drawn as a row of swatches under the stack. */
+function buildLayerColors() {
+  const host = $('layColors');
+  if (!host) return;
+  host.textContent = '';
+  const L = layEditing == null ? null : layerById(state.map, layEditing);
+  const pick = (hex) => {
+    if (!L) return;
+    snapshot();
+    L.color = hex;
+    buildLayerPanel(true);
+    buildLayerColors();
+  };
+  const none = document.createElement('button');
+  none.className = 'layswatch none' + (L && !L.color ? ' on' : '');
+  none.title = 'No tag';
+  none.setAttribute('aria-label', 'No colour tag');
+  none.addEventListener('click', () => pick(null));
+  host.appendChild(none);
+  for (const c of LAYER_COLORS) {
+    const b = document.createElement('button');
+    b.className = 'layswatch' + (L && L.color === c.hex ? ' on' : '');
+    b.style.background = c.hex;
+    b.title = c.key;
+    b.setAttribute('aria-label', 'Tag this layer ' + c.key);
+    b.addEventListener('click', () => pick(c.hex));
+    host.appendChild(b);
+  }
+}
+
 function syncLayerBox() {
   const box = $('layerBox');
   const L = layEditing == null ? null : layerById(state.map, layEditing);
@@ -2475,8 +2780,6 @@ function syncLayerBox() {
   if (!L) return;
   const kind = LAYER_KINDS[L.kind];
   $('layEditName').textContent = L.name;
-  $('layName').value = L.name;
-  $('layName').disabled = kind.unique;
   $('layOpacity').value = L.opacity;
   $('layOpacityLbl').textContent = Math.round(L.opacity * 100) + '%';
   $('layBlend').value = L.blend || 'normal';
@@ -2484,24 +2787,27 @@ function syncLayerBox() {
   // terrain has nothing beneath it to blend with
   const canBlend = !kind.filter && L.kind !== 'terrain';
   $('layBlendField').style.display = canBlend ? '' : 'none';
-  // the effects row's strengths live in Appearance, each with its own slider;
-  // a second one here would be a third way to say the same thing
-  const canFade = L.kind !== 'effects';
-  $('layOpacity').closest('.field').style.display = canFade ? '' : 'none';
+  // Terrain is drawn straight onto an empty canvas, so fading it reveals the
+  // void and nothing else; the effects row keeps its strengths in Appearance.
+  // Neither gets a slider that would lie about what it does.
+  $('layOpacity').closest('.field').style.display = layerCanFade(L) ? '' : 'none';
   $('layDelete').disabled = kind.pinned ||
     (L.kind === 'objects' && objectLayers(state.map).length <= 1);
   $('layMerge').disabled = L.kind !== 'objects';
   $('laySelMove').disabled = L.kind !== 'objects' || (state.selected == null && state.selLabel == null);
   $('layBlurb').textContent = kind.filter && L.kind !== 'effects'
     ? kind.blurb + ' Opacity is how strong it is.'
-    : kind.blurb;
+    : kind.blurb + (layerRenameable(L) ? ' Double-click the row to rename it.' : '');
+  buildLayerColors();
+  const n = rowSel.length;
+  $('layBulk').classList.toggle('on', n > 1);
+  $('layBulkCount').textContent = n + ' rows selected';
 }
 
 function applyLayerEdits() {
   const L = layEditing == null ? null : layerById(state.map, layEditing);
   if (!L) return;
   const kind = LAYER_KINDS[L.kind];
-  if (!kind.unique) L.name = $('layName').value.trim() || L.name;
   if (L.kind !== 'effects') L.opacity = num('layOpacity');
   L.blend = $('layBlend').value;
   $('layOpacityLbl').textContent = Math.round(L.opacity * 100) + '%';
@@ -2554,10 +2860,11 @@ function soloLayer() {
 function wireLayerDrag(host) {
   let drag = null;
 
-  const rowAt = (clientY) => {
-    // An unfolded layer puts its contents between its row and the next one, so
-    // a pointer there is over no row at all. That block belongs to the layer it
-    // hangs from, so the last row that starts above the cursor is the answer.
+  /* Where a layer row would land. An unfolded layer puts its contents between
+     its own row and the next, so a pointer there is over no row at all; that
+     block belongs to the layer it hangs from, so the last row starting above
+     the cursor is the answer. */
+  const layerAt = (clientY) => {
     let last = null;
     for (const r of host.querySelectorAll('.layerrow')) {
       const b = r.getBoundingClientRect();
@@ -2566,16 +2873,49 @@ function wireLayerDrag(host) {
     }
     return last ? { row: last, above: false } : null;
   };
+
+  /* Where an object row would land: which unfolded layer, and how many rows
+     down inside it. Dropping on a layer row itself means the top of it, which
+     is how a thing gets moved to another layer. */
+  const objectAt = (clientY) => {
+    const blocks = host.querySelectorAll('.objkids');
+    for (const block of blocks) {
+      const b = block.getBoundingClientRect();
+      if (clientY < b.top || clientY > b.bottom) continue;
+      const rows = [...block.querySelectorAll('.objrow')];
+      const lay = rows.length ? parseInt(rows[0].dataset.lay, 10) : null;
+      if (lay == null) continue;
+      let idx = rows.length;
+      for (let n = 0; n < rows.length; n++) {
+        const rb = rows[n].getBoundingClientRect();
+        if (clientY < rb.top + rb.height / 2) { idx = n; break; }
+      }
+      return { lay, idx, row: rows[Math.min(idx, rows.length - 1)] || null, above: idx < rows.length };
+    }
+    const hit = layerAt(clientY);
+    if (hit) {
+      const L = layerById(state.map, parseInt(hit.row.dataset.id, 10));
+      if (L && L.kind === 'objects') return { lay: L.id, idx: 0, row: hit.row, above: true, onLayer: true };
+    }
+    return null;
+  };
+
   const clearMarks = () => {
-    for (const r of host.querySelectorAll('.layerrow')) r.classList.remove('dropbefore', 'dropafter');
+    for (const r of host.querySelectorAll('.layerrow, .objrow')) r.classList.remove('dropbefore', 'dropafter');
   };
 
   host.addEventListener('pointerdown', (ev) => {
     if (ev.button !== 0) return;
+    if (ev.target.closest('.laytoggle') || ev.target.closest('.laytwist')) return;
+    if (ev.target.closest('.layrename')) return;
+    const objRow = ev.target.closest('.objrow');
+    if (objRow) {
+      drag = { type: 'object', key: objRow.dataset.key, row: objRow, y0: ev.clientY, moved: false };
+      return;
+    }
     const row = ev.target.closest('.layerrow');
     if (!row || row.classList.contains('pinned')) return;
-    if (ev.target.closest('.laytoggle')) return;   // the eye and the lock are not handles
-    drag = { id: parseInt(row.dataset.id, 10), row, y0: ev.clientY, moved: false };
+    drag = { type: 'layer', id: parseInt(row.dataset.id, 10), row, y0: ev.clientY, moved: false };
   });
 
   host.addEventListener('pointermove', (ev) => {
@@ -2588,9 +2928,12 @@ function wireLayerDrag(host) {
       host.setPointerCapture(ev.pointerId);
     }
     clearMarks();
-    const hit = rowAt(ev.clientY);
-    if (hit && !hit.row.classList.contains('pinned')) {
-      hit.row.classList.add(hit.above ? 'dropbefore' : 'dropafter');
+    if (drag.type === 'layer') {
+      const hit = layerAt(ev.clientY);
+      if (hit && !hit.row.classList.contains('pinned')) hit.row.classList.add(hit.above ? 'dropbefore' : 'dropafter');
+    } else {
+      const hit = objectAt(ev.clientY);
+      if (hit && hit.row) hit.row.classList.add(hit.above ? 'dropbefore' : 'dropafter');
     }
   });
 
@@ -2602,13 +2945,19 @@ function wireLayerDrag(host) {
     d.row.classList.remove('dragging');
     if (host.hasPointerCapture && host.hasPointerCapture(ev.pointerId)) host.releasePointerCapture(ev.pointerId);
     if (!d.moved) return;
-    // a drag is not a click; the row must not also become the active layer
+    // a drag is not a click; the row must not also become the selection
     host.addEventListener('click', (e) => e.stopPropagation(), { capture: true, once: true });
-    const hit = rowAt(ev.clientY);
-    if (!hit || hit.row.classList.contains('pinned')) return;
-    const overId = parseInt(hit.row.dataset.id, 10);
-    if (overId === d.id) return;
-    dropLayer(d.id, overId, hit.above);
+    if (d.type === 'layer') {
+      const hit = layerAt(ev.clientY);
+      if (!hit || hit.row.classList.contains('pinned')) return;
+      const overId = parseInt(hit.row.dataset.id, 10);
+      if (overId === d.id) return;
+      dropLayer(d.id, overId, hit.above);
+    } else {
+      const hit = objectAt(ev.clientY);
+      if (!hit) return;
+      dropObject(d.key, hit.lay, hit.idx);
+    }
   };
   host.addEventListener('pointerup', finish);
   host.addEventListener('pointercancel', finish);
@@ -2661,7 +3010,6 @@ function setupLayerPanel() {
     o.value = b.key; o.textContent = b.label;
     sel.appendChild(o);
   }
-  $('layName').addEventListener('input', applyLayerEdits);
   $('layOpacity').addEventListener('input', applyLayerEdits);
   sel.addEventListener('change', applyLayerEdits);
   $('layAdd').addEventListener('click', () => {
@@ -2683,6 +3031,10 @@ function setupLayerPanel() {
     refresh(false);
   });
   $('layDelete').addEventListener('click', () => {
+    // with several rows picked, the trash in the settings box means the same
+    // thing as the one in the bulk bar; two buttons disagreeing about scope is
+    // how somebody loses four layers meaning to lose one
+    if (rowSel.length > 1) { $('layBulkDelete').click(); return; }
     if (layEditing == null) return;
     const L = layerById(state.map, layEditing);
     if (!L) return;
@@ -2698,6 +3050,18 @@ function setupLayerPanel() {
   });
   $('laySelMove').addEventListener('click', moveSelectionToLayer);
   $('layIsolate').addEventListener('click', soloLayer);
+  $('layBulkHide').addEventListener('click', () => {
+    if (rowSel.length) bulkVisible(rowSel[0], () => {});
+  });
+  $('layBulkDelete').addEventListener('click', () => {
+    const targets = selectedRowTargets();
+    const objs = targets.filter(t => t.kind !== 'layer').length;
+    const lays = targets.filter(t => t.kind === 'layer').length;
+    const what = [lays ? lays + ' layer' + (lays === 1 ? '' : 's') : '',
+                  objs ? objs + ' thing' + (objs === 1 ? '' : 's') : ''].filter(Boolean).join(' and ');
+    if (!confirm('Delete ' + what + '?')) return;
+    deleteSelection();
+  });
 }
 
 /* ---------------- panel construction ---------------- */

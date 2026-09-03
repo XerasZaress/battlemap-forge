@@ -473,6 +473,61 @@ button.danger:hover {
 .objhead .pickersearch { flex: 1 1 auto; margin: 0; }
 .objhead .iconbtn { flex: 0 0 auto; }
 
+/* the grip: the signifier that a row can be dragged. Present on everything that
+   moves and blanked — not removed — on everything that does not, so the names
+   down the stack still line up. */
+.laygrip {
+  flex: 0 0 auto; width: 13px; height: 20px;
+  display: grid; place-items: center;
+  color: var(--text-faint); cursor: grab;
+}
+.laygrip svg { width: 12px; height: 12px; }
+.layerrow:hover .laygrip, .objrow:hover .laygrip { color: var(--text-dim); }
+.laygrip.blank { visibility: hidden; cursor: default; }
+.dragging .laygrip { cursor: grabbing; }
+
+/* the colour tag down the leading edge */
+.laytag {
+  flex: 0 0 auto; width: 3px; align-self: stretch; min-height: 18px;
+  border-radius: 2px; background: transparent;
+}
+.laytag.untagged { background: transparent; }
+
+/* renaming in place, on the row where the name is */
+.layrename {
+  flex: 1 1 auto; min-width: 0; width: 100%;
+  font: inherit; font-size: var(--fs-sm); color: var(--text);
+  background: var(--surface-1); border: 1px solid var(--accent);
+  border-radius: var(--r-xs); padding: 1px 4px;
+}
+
+/* a row caught by a multi-selection */
+.layerrow.picked, .objrow.picked {
+  background: var(--accent-wash);
+  box-shadow: inset 0 0 0 1px var(--accent-dim);
+}
+
+.laybulk {
+  display: none; align-items: center; gap: var(--s2);
+  margin-top: var(--s2); padding: var(--s2);
+  border: 1px solid var(--accent-dim); border-radius: var(--r-md);
+  background: var(--accent-wash);
+}
+.laybulk.on { display: flex; }
+.laybulk span { flex: 1 1 auto; font-size: var(--fs-xs); color: var(--text-dim); }
+
+.layswatches { display: flex; gap: 4px; flex-wrap: wrap; }
+.layswatch {
+  width: 16px; height: 16px; padding: 0; border-radius: 50%;
+  border: 1px solid var(--line-strong); cursor: pointer; background: transparent;
+}
+.layswatch.none { position: relative; background: var(--surface-3); }
+.layswatch.none::after {
+  content: ''; position: absolute; inset: 3px 1px; width: 12px; height: 1px;
+  margin: auto; background: var(--text-faint); transform: rotate(-45deg);
+}
+.layswatch.on { outline: 2px solid var(--text); outline-offset: 1px; }
+
 /* the twisty, and the blank of the same width that keeps every name aligned */
 .laytwist {
   flex: 0 0 auto; width: 16px; height: 20px; padding: 0;
