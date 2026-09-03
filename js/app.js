@@ -2023,30 +2023,47 @@ window.addEventListener('resize', () => {
 const OBJ_THUMB = 52;   // drawn big, shown at 26 — a wall torch at 26 px needs the pixels
 const objThumbCache = {};
 
-/** A small drawing of a prop, or a T for a label. Cached per prop form. */
-function objThumb(o) {
-  if (o.text !== undefined) {
-    const c = makeCanvas(OBJ_THUMB, OBJ_THUMB);
-    const x = c.getContext('2d');
-    x.fillStyle = '#2a2f3c'; x.fillRect(0, 0, OBJ_THUMB, OBJ_THUMB);
+/** The drawing for one kind of object, made once and kept. Never handed to the
+    DOM: a canvas is an element, an element lives in one place, and appending
+    the cached one to a second row silently steals it from the first — which is
+    why only the last Skull of five used to have a picture. */
+function objThumbSource(o) {
+  const key = o.text !== undefined ? 'label' : o.type + ':' + (o.vi || 0);
+  if (objThumbCache[key]) return objThumbCache[key];
+  const def = o.text !== undefined ? null : propDefFor(PROPS[o.type], o.vi);
+  if (o.text === undefined && !def) return null;
+
+  const c = makeCanvas(OBJ_THUMB, OBJ_THUMB);
+  const x = c.getContext('2d');
+  x.fillStyle = '#2a2f3c';
+  x.fillRect(0, 0, OBJ_THUMB, OBJ_THUMB);
+  if (def) {
+    x.save();
+    x.translate(OBJ_THUMB / 2, OBJ_THUMB / 2);
+    try { def.draw(x, (OBJ_THUMB - 8) / Math.max(1, def.size), seededFn(7)); } catch (e) { /* thumbnail only */ }
+    x.restore();
+  } else {
     x.fillStyle = '#cfd6e4';
     x.font = '600 30px Georgia, serif';
     x.textAlign = 'center'; x.textBaseline = 'middle';
     x.fillText('T', OBJ_THUMB / 2, OBJ_THUMB / 2 + 1);
-    return c;
   }
-  const def = propDefFor(PROPS[o.type], o.vi);
-  if (!def) return null;
-  const key = o.type + ':' + (o.vi || 0);
-  if (objThumbCache[key]) return objThumbCache[key];
+  objThumbCache[key] = c;
+  return c;
+}
+
+/** A row's own copy of that drawing. One 52-square blit per row, which is
+    nothing, and every row keeps the picture it was given. */
+function objThumb(o) {
+  const src = objThumbSource(o);
   const c = makeCanvas(OBJ_THUMB, OBJ_THUMB);
   const x = c.getContext('2d');
-  x.fillStyle = '#2a2f3c'; x.fillRect(0, 0, OBJ_THUMB, OBJ_THUMB);
-  x.save();
-  x.translate(OBJ_THUMB / 2, OBJ_THUMB / 2);
-  try { def.draw(x, (OBJ_THUMB - 8) / Math.max(1, def.size), seededFn(7)); } catch (e) { /* thumbnail only */ }
-  x.restore();
-  objThumbCache[key] = c;
+  // A prop whose art will not draw still gets a chip rather than no chip: rows
+  // that sometimes have a picture and sometimes do not read as a bug, and one
+  // of them was.
+  x.fillStyle = '#2a2f3c';
+  x.fillRect(0, 0, OBJ_THUMB, OBJ_THUMB);
+  if (src) x.drawImage(src, 0, 0);
   return c;
 }
 
@@ -2131,9 +2148,10 @@ function appendObjectRows(host, L, q) {
     eye.addEventListener('click', (ev) => { ev.stopPropagation(); toggleObjFlag(e, 'hid'); });
 
     const thumb = objThumb(e.o);
+    thumb.className = 'objthumb';
     const name = document.createElement('span');
     name.className = 'objname';
-    if (thumb) { thumb.className = 'objthumb'; name.appendChild(thumb); }
+    name.appendChild(thumb);
     const t = document.createElement('b');
     t.textContent = objLabel(e.o);
     name.appendChild(t);
